@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexo ERP Móvil - Actualizador de Precios</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- LIBRERÍAS DE FIREBASE -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .input-mobile { background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; color: #fff; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased pb-24">
+
+    <!-- HEADER -->
+    <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 shadow-lg">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 font-black text-xl shadow-md">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                </div>
+                <div>
+                    <h1 class="text-sm font-extrabold text-white leading-tight">Nexo ERP Móvil</h1>
+                    <span id="txtEstadoNube" class="text-[10px] text-cyan-400 font-mono">Conectado en la nube</span>
+                </div>
+            </div>
+            <button onclick="abrirModalNuevoProducto()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition shadow-md cursor-pointer">
+                <i class="fa-solid fa-plus"></i> Nuevo
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto w-full p-4 space-y-4 flex-1">
+        <!-- BUSCADOR -->
+        <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3.5 text-xs text-slate-400"></i>
+            <input 
+                type="text" 
+                id="inputBuscarProdMovil" 
+                placeholder="Buscar producto, proveedor o categoría..." 
+                oninput="filtrarCatalogoMovil(this.value)"
+                class="input-mobile w-full pl-9 pr-4 py-3 text-xs text-white placeholder-slate-500 outline-none"
+            >
+        </div>
+
+        <!-- LISTA DE PRODUCTOS PARA EDITAR RÁPIDO -->
+        <div id="listaProductosMovil" class="space-y-3"></div>
+    </main>
+
+    <!-- MODAL EDITAR PRODUCTO / PRECIOS -->
+    <div id="modalEditarProd" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-3">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-black uppercase text-white flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square text-cyan-400"></i> Editar Artículo
+                </h3>
+                <button onclick="cerrarModalEditar()" class="text-slate-400 hover:text-white p-1 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <input type="hidden" id="editProdId">
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nombre del Producto:</label>
+                    <input type="text" id="editProdNombre" class="input-mobile w-full p-2.5 text-xs font-bold text-white outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Presentación / Grams:</label>
+                        <input type="text" id="editProdGrams" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Proveedor:</label>
+                        <input type="text" id="editProdSupplier" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-cyan-400 mb-1">Costo Base ($):</label>
+                        <input type="number" step="any" id="editProdCosto" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-cyan-300 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-emerald-400 mb-1">Precio Venta PVP ($):</label>
+                        <input type="number" step="any" id="editProdPVP" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-emerald-400 outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Stock Actual (Depósito):</label>
+                    <input type="number" step="any" id="editProdStock" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-white outline-none">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+                <button onclick="cerrarModalEditar()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">Cancelar</button>
+                <button onclick="guardarCambiosProductoMovil()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 active:scale-95 cursor-pointer">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL NUEVO PRODUCTO CON CÁMARA / FOTO -->
+    <div id="modalNuevoProd" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-3">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-black uppercase text-white flex items-center gap-2">
+                    <i class="fa-solid fa-box-open text-emerald-400"></i> Nuevo Producto
+                </h3>
+                <button onclick="cerrarModalNuevoProducto()" class="text-slate-400 hover:text-white p-1 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nombre del Artículo *:</label>
+                    <input type="text" id="newProdNombre" placeholder="Ej: Mayonesa Natura 500g" class="input-mobile w-full p-2.5 text-xs font-bold text-white outline-none">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Categoría:</label>
+                        <input type="text" id="newProdCat" value="Almacén" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Proveedor:</label>
+                        <input type="text" id="newProdSupplier" placeholder="Supermercado El Sol" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-cyan-400 mb-1">Costo Unitario ($):</label>
+                        <input type="number" step="any" id="newProdCosto" value="0" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-cyan-300 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-emerald-400 mb-1">Precio Venta PVP ($):</label>
+                        <input type="number" step="any" id="newProdPVP" value="0" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-emerald-400 outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Presentación:</label>
+                        <input type="text" id="newProdGrams" value="Unidad" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Stock Inicial:</label>
+                        <input type="number" id="newProdStock" value="10" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-white outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Foto del Producto (Cámara o galería):</label>
+                    <input type="file" id="newProdFotoFile" accept="image/*" class="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700 cursor-pointer">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
+                <button onclick="cerrarModalNuevoProducto()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">Cancelar</button>
+                <button onclick="crearNuevoProductoMovil()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer">Crear Producto</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBsffpYVYNV5YBgzqqPEWFtmp43cZTSgyo",
+            authDomain: "nexo-erp-d4f75.firebaseapp.com",
+            projectId: "nexo-erp-d4f75",
+            storageBucket: "nexo-erp-d4f75.firebasestorage.app",
+            messagingSenderId: "6395575075",
+            appId: "1:6395575075:web:6aa671b41e4dab4edaea96"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        let datosGlobalesNube = { catalog: [], bizConfig: { name: 'MI DISTRIBUIDORA' }, clients: [], sellers: [], orders: [] };
+
+        function fmtMoneda(num) {
+            return '$ ' + Math.round(Number(num) || 0).toLocaleString('es-AR');
+        }
+
+        function initMovil() {
+            db.collection('nexo_erp').doc('datos_globales').onSnapshot(doc => {
+                if (doc.exists) {
+                    datosGlobalesNube = doc.data();
+                    renderCatalogoMovil();
+                    document.getElementById('txtEstadoNube').textContent = 'Sincronizado en vivo';
+                }
+            });
+        }
+
+        function renderCatalogoMovil(filtro = '') {
+            const container = document.getElementById('listaProductosMovil');
+            if (!container) return;
+
+            const catalog = datosGlobalesNube.catalog || [];
+            const q = filtro.trim().toLowerCase();
+
+            const filtrados = catalog.filter(p => !q || 
+                (p.name && p.name.toLowerCase().includes(q)) || 
+                (p.supplier && p.supplier.toLowerCase().includes(q)) || 
+                (p.category && p.category.toLowerCase().includes(q))
+            );
+
+            if (filtrados.length === 0) {
+                container.innerHTML = `<div class="p-8 text-center text-slate-500 italic text-xs bg-slate-900 rounded-2xl border border-slate-800">No se encontraron productos.</div>`;
+                return;
+            }
+
+            container.innerHTML = filtrados.map(p => `
+                <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-md">
+                    <div class="flex-1 min-w-0">
+                        <strong class="text-xs text-white block truncate">${p.name}</strong>
+                        <span class="text-[10px] text-slate-400 block">${p.grams || 'Unidad'} • <strong class="text-amber-400">${p.supplier || 'Sin Proveedor'}</strong></span>
+                        <div class="flex items-center gap-3 mt-1.5 font-mono">
+                            <span class="text-xs text-cyan-400">Costo: <strong>${fmtMoneda(p.cost || 0)}</strong></span>
+                            <span class="text-xs text-emerald-400 font-bold">PVP: <strong>${fmtMoneda(p.pvp || 0)}</strong></span>
+                        </div>
+                    </div>
+                    <button onclick="abrirModalEditar(${p.id})" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-slate-700 transition cursor-pointer flex-shrink-0 flex items-center gap-1.5">
+                        <i class="fa-solid fa-pen"></i> Editar
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function filtrarCatalogoMovil(val) {
+            renderCatalogoMovil(val);
+        }
+
+        function abrirModalEditar(id) {
+            const p = (datosGlobalesNube.catalog || []).find(x => String(x.id) === String(id));
+            if (!p) return;
+
+            document.getElementById('editProdId').value = p.id;
+            document.getElementById('editProdNombre').value = p.name || '';
+            document.getElementById('editProdGrams').value = p.grams || '';
+            document.getElementById('editProdSupplier').value = p.supplier || '';
+            document.getElementById('editProdCosto').value = p.cost || 0;
+            document.getElementById('editProdPVP').value = p.pvp || 0;
+            document.getElementById('editProdStock').value = p.stock || 0;
+
+            document.getElementById('modalEditarProd').classList.remove('hidden');
+        }
+
+        function cerrarModalEditar() {
+            document.getElementById('modalEditarProd').classList.add('hidden');
+        }
+
+        async function guardarCambiosProductoMovil() {
+            const id = document.getElementById('editProdId').value;
+            const nombre = document.getElementById('editProdNombre').value.trim();
+            const grams = document.getElementById('editProdGrams').value.trim();
+            const supplier = document.getElementById('editProdSupplier').value.trim();
+            const costo = parseFloat(document.getElementById('editProdCosto').value) || 0;
+            const pvp = parseFloat(document.getElementById('editProdPVP').value) || 0;
+            const stock = parseFloat(document.getElementById('editProdStock').value) || 0;
+
+            if (!nombre) { alert('El nombre es obligatorio'); return; }
+
+            const prod = (datosGlobalesNube.catalog || []).find(x => String(x.id) === String(id));
+            if (prod) {
+                prod.name = nombre;
+                prod.grams = grams;
+                prod.supplier = supplier;
+                prod.cost = costo;
+                prod.pvp = pvp;
+                prod.stock = stock;
+            }
+
+            try {
+                await db.collection('nexo_erp').doc('datos_globales').set(datosGlobalesNube);
+                cerrarModalEditar();
+                alert('✅ ¡Precio y stock actualizados desde el celular!');
+            } catch (err) {
+                alert('❌ Error al actualizar en la nube.');
+            }
+        }
+
+        function abrirModalNuevoProducto() {
+            document.getElementById('newProdNombre').value = '';
+            document.getElementById('newProdCosto').value = '0';
+            document.getElementById('newProdPVP').value = '0';
+            document.getElementById('newProdStock').value = '10';
+            document.getElementById('newProdFotoFile').value = '';
+            document.getElementById('modalNuevoProd').classList.remove('hidden');
+        }
+
+        function cerrarModalNuevoProducto() {
+            document.getElementById('modalNuevoProd').classList.add('hidden');
+        }
+
+        async function crearNuevoProductoMovil() {
+            const nombre = document.getElementById('newProdNombre').value.trim();
+            const category = document.getElementById('newProdCat').value.trim() || 'Almacén';
+            const supplier = document.getElementById('newProdSupplier').value.trim() || 'General';
+            const cost = parseFloat(document.getElementById('newProdCosto').value) || 0;
+            const pvp = parseFloat(document.getElementById('newProdPVP').value) || 0;
+            const grams = document.getElementById('newProdGrams').value.trim() || 'Unidad';
+            const stock = parseFloat(document.getElementById('newProdStock').value) || 0;
+            const fileInput = document.getElementById('newProdFotoFile');
+
+            if (!nombre) { alert('Escribí el nombre del producto'); return; }
+
+            let base64Img = '';
+            if (fileInput.files && fileInput.files[0]) {
+                base64Img = await comprimirYConvertirImagen(fileInput.files[0]);
+            }
+
+            const nuevoProd = {
+                id: Date.now(),
+                name: nombre,
+                category,
+                supplier,
+                cost,
+                freight: 0,
+                fixedPct: 6,
+                sellerPct: 7,
+                profitPct: 15,
+                payFee: 0,
+                iibb: 0,
+                iva: 0,
+                profitMode: 'margin',
+                pvp,
+                comision: pvp * 0.07,
+                comisionPct: 7,
+                grams,
+                stock,
+                img: base64Img,
+                selectedForCatalog: true,
+                inCatalog: true,
+                isFeatured: false,
+                promoText: ''
+            };
+
+            datosGlobalesNube.catalog = datosGlobalesNube.catalog || [];
+            datosGlobalesNube.catalog.unshift(nuevoProd);
+
+            try {
+                await db.collection('nexo_erp').doc('datos_globales').set(datosGlobalesNube);
+                cerrarModalNuevoProducto();
+                alert('✅ ¡Nuevo producto creado desde el celular y sincronizado!');
+            } catch (err) {
+                alert('❌ Error al guardar en la nube.');
+            }
+        }
+
+        function comprimirYConvertirImagen(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 250;
+                        const MAX_HEIGHT = 250;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        } else {
+                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7));
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        window.addEventListener('DOMContentLoaded', initMovil);
+    </script>
+</body>
+</html>
