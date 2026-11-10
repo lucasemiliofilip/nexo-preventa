@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa v12 - ERP Unificado Limpio</title>
+    <title>Nexo Preventa - Sincronizado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -15,157 +15,174 @@
         body { -webkit-tap-highlight-color: transparent; }
         .input-mobile { background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; color: #fff; }
         .input-pin { letter-spacing: 0.35em; font-family: monospace; }
+
+        #areaImpresionNativa { display: none; }
+
         @media print {
-            .no-print { display: none !important; }
-            body { background: white !important; color: black !important; }
+            @page { size: A4 portrait; margin: 10mm; }
+            body { background: #ffffff !important; color: #0f172a !important; padding: 0 !important; margin: 0 !important; }
+            #appPrincipalWrapper, #pantallaLogin, #modalReporteEmergente, #modalResumenPedido, #modalCambiarPin, #barraFlotantePedido {
+                display: none !important;
+            }
+            #areaImpresionNativa {
+                display: block !important;
+                width: 100% !important;
+                background: #ffffff !important;
+                color: #0f172a !important;
+            }
         }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased pb-28">
 
-    <!-- PANTALLA DE LOGIN CON PIN -->
-    <div id="pantallaLogin" class="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center p-5">
-        <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-center">
-            <div class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-3xl font-black shadow-lg">
-                <i class="fa-solid fa-lock"></i>
-            </div>
-            <div>
-                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v12</span></h2>
-                <p class="text-xs text-slate-400 mt-0.5">Sistema conectado a Firebase</p>
-            </div>
-            <div class="space-y-3.5 text-left">
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Vendedor:</label>
-                    <select id="loginVendedorSelect" class="input-mobile w-full px-3.5 py-3 text-xs font-bold text-emerald-400 outline-none cursor-pointer">
-                    </select>
+    <!-- ÁREA PARA IMPRIMIR / GUARDAR LISTA DE PRECIOS EN PDF DESDE EL CELULAR -->
+    <div id="areaImpresionNativa"></div>
+
+    <div id="appPrincipalWrapper" class="flex-1 flex flex-col">
+        <!-- PANTALLA DE LOGIN CON PIN -->
+        <div id="pantallaLogin" class="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center p-5">
+            <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-center">
+                <div class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-3xl font-black shadow-lg">
+                    <i class="fa-solid fa-lock"></i>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">PIN / Contraseña:</label>
-                    <input 
-                        type="password" 
-                        id="loginPinInput" 
-                        maxlength="12" 
-                        placeholder="••••" 
-                        class="input-mobile input-pin w-full px-3.5 py-3 text-sm text-center font-bold text-white outline-none focus:border-emerald-500 transition"
-                        onkeydown="if(event.key === 'Enter') ingresarPreventa()"
-                    >
-                    <span class="text-[10px] text-slate-500 block text-center mt-1">Clave por defecto: <strong class="text-slate-400 font-mono">1234</strong></span>
+                    <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">Sincronizado en tiempo real con ERP</p>
                 </div>
-            </div>
-            <button onclick="ingresarPreventa()" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase py-3.5 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-2">
-                <i class="fa-solid fa-arrow-right-to-bracket text-sm"></i> Ingresar a mi Cartera
-            </button>
-            <div class="pt-2 border-t border-slate-800 flex justify-center items-center text-[11px]">
-                <button onclick="forzarActualizacionVendedores()" class="text-amber-400 hover:underline font-semibold cursor-pointer">
-                    Actualizar Lista
+                <div class="space-y-3.5 text-left">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Vendedor:</label>
+                        <select id="loginVendedorSelect" class="input-mobile w-full px-3.5 py-3 text-xs font-bold text-emerald-400 outline-none cursor-pointer">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">PIN / Contraseña:</label>
+                        <input 
+                            type="password" 
+                            id="loginPinInput" 
+                            maxlength="12" 
+                            placeholder="••••" 
+                            class="input-mobile input-pin w-full px-3.5 py-3 text-sm text-center font-bold text-white outline-none focus:border-emerald-500 transition"
+                            onkeydown="if(event.key === 'Enter') ingresarPreventa()"
+                        >
+                        <span class="text-[10px] text-slate-500 block text-center mt-1">Clave por defecto: <strong class="text-slate-400 font-mono">1234</strong></span>
+                    </div>
+                </div>
+                <button onclick="ingresarPreventa()" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase py-3.5 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-arrow-right-to-bracket text-sm"></i> Ingresar a mi Cartera
                 </button>
             </div>
         </div>
-    </div>
 
-    <!-- HEADER SUPERIOR -->
-    <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 shadow-lg">
-        <div class="max-w-md mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-xl shadow-md">
-                    N
-                </div>
-                <div>
-                    <h1 class="text-sm font-extrabold text-white leading-tight">Nexo Preventa</h1>
-                    <div class="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <div class="flex items-center gap-1 cursor-pointer hover:text-white transition" onclick="bloquearSesion()" title="Bloquear Sesión">
-                            <span id="txtNombreVendedor" class="text-xs text-emerald-400 font-bold">-</span>
-                            <i class="fa-solid fa-lock text-[10px] text-slate-400"></i>
-                        </div>
-                        <div class="w-px h-3 bg-slate-700"></div>
-                        <div class="flex items-center gap-1 cursor-pointer text-slate-400 hover:text-amber-400 transition" onclick="abrirCambioPinModal()" title="Cambiar mi PIN">
-                            <i class="fa-solid fa-key text-[10px]"></i>
-                            <span class="text-[10px] font-bold">PIN</span>
-                        </div>
-                        <div class="w-px h-3 bg-slate-700"></div>
-                        <!-- BOTÓN LISTA DE PRECIOS -->
-                        <div class="flex items-center gap-1 cursor-pointer text-blue-400 hover:text-blue-300 transition" onclick="abrirModalReporte('lista')" title="Ver Lista de Precios">
-                            <i class="fa-solid fa-list text-[11px]"></i>
-                            <span class="text-[10px] font-bold">Lista Precios</span>
-                        </div>
-                        <div class="w-px h-3 bg-slate-700"></div>
-                        <!-- BOTÓN CATÁLOGO CON FOTOS -->
-                        <div class="flex items-center gap-1 cursor-pointer text-emerald-400 hover:text-emerald-300 transition" onclick="abrirModalReporte('catalogo')" title="Ver Catálogo Visual">
-                            <i class="fa-solid fa-images text-[11px]"></i>
-                            <span class="text-[10px] font-bold">Catálogo Fotos</span>
+        <!-- HEADER SUPERIOR (SOLO BOTÓN LISTA DE PRECIOS PDF) -->
+        <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 shadow-lg">
+            <div class="max-w-md mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-xl shadow-md">
+                        N
+                    </div>
+                    <div>
+                        <h1 class="text-sm font-extrabold text-white leading-tight">Nexo Preventa</h1>
+                        <div class="flex items-center gap-2 mt-1 flex-wrap">
+                            <div class="flex items-center gap-1 cursor-pointer hover:text-white transition" onclick="bloquearSesion()" title="Bloquear Sesión">
+                                <span id="txtNombreVendedor" class="text-xs text-emerald-400 font-bold">-</span>
+                                <i class="fa-solid fa-lock text-[10px] text-slate-400"></i>
+                            </div>
+                            <div class="w-px h-3 bg-slate-700"></div>
+                            <div class="flex items-center gap-1 cursor-pointer text-slate-400 hover:text-amber-400 transition" onclick="abrirCambioPinModal()" title="Cambiar mi PIN">
+                                <i class="fa-solid fa-key text-[10px]"></i>
+                                <span class="text-[10px] font-bold">PIN</span>
+                            </div>
+                            <div class="w-px h-3 bg-slate-700"></div>
+                            <!-- ÚNICO BOTÓN DE REPORTE: LISTA DE PRECIOS -->
+                            <button onclick="abrirModalListaPrecios()" class="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg text-emerald-400 hover:bg-emerald-500/25 transition cursor-pointer">
+                                <i class="fa-solid fa-file-pdf text-[10px]"></i>
+                                <span class="text-[10px] font-bold">Lista de Precios</span>
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
-            <div class="flex items-center gap-2">
-                <div id="btnSync" class="bg-slate-800 text-emerald-400 font-black text-[10px] px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-500/30">
-                    <i class="fa-solid fa-cloud text-xs"></i> Firebase
+                <div class="flex items-center gap-2">
+                    <button onclick="recargarDesdeFirebaseManual()" id="btnSync" class="bg-slate-800 text-emerald-400 font-black text-[10px] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-500/30 cursor-pointer">
+                        <i class="fa-solid fa-cloud text-xs"></i> En Vivo
+                    </button>
                 </div>
             </div>
-        </div>
-    </header>
+        </header>
 
-    <main class="max-w-md mx-auto w-full p-4 space-y-4 flex-1">
-        <!-- RENDIMIENTO SEMANAL -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
-            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
-                <span class="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                    <i class="fa-solid fa-calendar-week"></i> RENDIMIENTO SEMANAL
-                </span>
-                <button onclick="reiniciarSemana()" class="text-[10px] text-slate-400 hover:text-rose-400 flex items-center gap-1 font-semibold cursor-pointer">
-                    <i class="fa-solid fa-pen-to-square text-[9px]"></i> Reiniciar
-                </button>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                    <span class="text-[10px] font-bold uppercase text-slate-400 block">MI VENTA</span>
-                    <div id="kpiVentaSemanal" class="text-xl font-mono font-black text-white mt-0.5">$ 0</div>
-                    <span id="kpiCantPedidosSemanal" class="text-[10px] text-slate-500 block">0 pedidos</span>
-                </div>
-                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
-                    <span class="text-[10px] font-bold uppercase text-slate-400 block">COMISIÓN</span>
-                    <div id="kpiComisionSemanal" class="text-xl font-mono font-black text-emerald-400 mt-0.5">$ 0</div>
-                    <span id="kpiPctComisionProm" class="text-[10px] text-slate-500 block">0% prom.</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- CLIENTES -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2.5">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-1.5">
-                    <span class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                        <i class="fa-solid fa-user-check"></i> MIS CLIENTES
+        <main class="max-w-md mx-auto w-full p-4 space-y-4 flex-1">
+            <!-- RENDIMIENTO SEMANAL -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                    <span class="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-calendar-week"></i> RENDIMIENTO SEMANAL
                     </span>
-                    <span id="txtCantMisClientes" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">0</span>
+                    <button onclick="reiniciarSemana()" class="text-[10px] text-slate-400 hover:text-rose-400 flex items-center gap-1 font-semibold cursor-pointer">
+                        <i class="fa-solid fa-pen-to-square text-[9px]"></i> Reiniciar
+                    </button>
                 </div>
-                <button onclick="abrirNuevoClienteModal()" class="text-xs text-emerald-400 hover:underline font-bold cursor-pointer">
-                    + Nuevo
-                </button>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                        <span class="text-[10px] font-bold uppercase text-slate-400 block">MI VENTA</span>
+                        <div id="kpiVentaSemanal" class="text-xl font-mono font-black text-white mt-0.5">$ 0</div>
+                        <span id="kpiCantPedidosSemanal" class="text-[10px] text-slate-500 block">0 pedidos</span>
+                    </div>
+                    <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                        <span class="text-[10px] font-bold uppercase text-slate-400 block">COMISIÓN</span>
+                        <div id="kpiComisionSemanal" class="text-xl font-mono font-black text-emerald-400 mt-0.5">$ 0</div>
+                        <span id="kpiPctComisionProm" class="text-[10px] text-slate-500 block">0% prom.</span>
+                    </div>
+                </div>
             </div>
-            <select id="selCliente" class="input-mobile w-full px-3 py-2.5 text-xs font-semibold text-white outline-none cursor-pointer">
-                <option value="">-- Seleccionar de mis clientes --</option>
-            </select>
-        </div>
 
-        <!-- BUSCADOR -->
-        <div class="relative">
-            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-xs text-slate-400"></i>
-            <input 
-                type="text" 
-                id="inputBuscarProd" 
-                placeholder="Buscar producto o marca..." 
-                oninput="filtrarProductosLive(this.value)"
-                class="input-mobile w-full pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 outline-none"
-            >
-            <button onclick="limpiarBuscador()" id="btnLimpiarBuscar" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer">
-                <i class="fa-solid fa-xmark text-sm"></i>
-            </button>
-        </div>
+            <!-- CLIENTES -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2.5">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-user-check"></i> MIS CLIENTES
+                        </span>
+                        <span id="txtCantMisClientes" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">0</span>
+                    </div>
+                    <button onclick="abrirNuevoClienteModal()" class="text-xs text-emerald-400 hover:underline font-bold cursor-pointer">
+                        + Nuevo
+                    </button>
+                </div>
+                <select id="selCliente" class="input-mobile w-full px-3 py-2.5 text-xs font-semibold text-white outline-none cursor-pointer">
+                    <option value="">-- Seleccionar de mis clientes --</option>
+                </select>
+            </div>
 
-        <!-- LISTA DE PRODUCTOS -->
-        <div id="listaProductosContenedor" class="space-y-2.5"></div>
-    </main>
+            <!-- FILTRO RÁPIDO DE ACCIONES COMERCIALES Y BUSCADOR -->
+            <div class="space-y-2">
+                <div class="flex items-center gap-2">
+                    <button id="btnFiltroTodos" onclick="setFiltroPromos(false)" class="flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-emerald-500 text-slate-950 shadow-md">
+                        Todos los Artículos
+                    </button>
+                    <button id="btnFiltroPromos" onclick="setFiltroPromos(true)" class="flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-slate-900 text-amber-400 border border-amber-500/40 flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-fire"></i> Promos Activas (<span id="badgeCantPromos">0</span>)
+                    </button>
+                </div>
+
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-xs text-slate-400"></i>
+                    <input 
+                        type="text" 
+                        id="inputBuscarProd" 
+                        placeholder="Buscar producto, categoría o descuento..." 
+                        oninput="filtrarProductosLive(this.value)"
+                        class="input-mobile w-full pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 outline-none"
+                    >
+                    <button onclick="limpiarBuscador()" id="btnLimpiarBuscar" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- LISTA DE PRODUCTOS -->
+            <div id="listaProductosContenedor" class="space-y-2.5"></div>
+        </main>
+    </div>
 
     <!-- BARRA INFERIOR -->
     <div id="barraFlotantePedido" class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-3.5 z-40">
@@ -180,22 +197,24 @@
         </div>
     </div>
 
-    <!-- MODAL VENTANA EMERGENTE PARA LISTA / CATÁLOGO -->
-    <div id="modalReporteEmergente" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+    <!-- MODAL LISTA DE PRECIOS OFICIAL (SIN IMÁGENES, CON PROMOS) -->
+    <div id="modalReporteEmergente" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl flex flex-col shadow-2xl max-h-[92vh]">
-            <div class="flex justify-between items-center border-b border-slate-800 p-4 bg-slate-950 rounded-t-2xl">
-                <h3 id="modalReporteTitulo" class="text-sm font-black uppercase text-white flex items-center gap-2">
-                    <i class="fa-solid fa-file-pdf text-emerald-400"></i> Vista Previa
+            <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-800 p-3.5 bg-slate-950 rounded-t-2xl">
+                <h3 class="text-xs sm:text-sm font-black uppercase text-white flex items-center gap-2">
+                    <i class="fa-solid fa-file-pdf text-emerald-400"></i> Lista de Precios Oficial
                 </h3>
                 <div class="flex items-center gap-2">
-                    <button onclick="imprimirReporteActual()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer">
-                        <i class="fa-solid fa-print"></i> Imprimir / PDF
+                    <button onclick="compartirTextoWhatsAppPreventa()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer">
+                        <i class="fa-brands fa-whatsapp"></i> WhatsApp
                     </button>
-                    <button onclick="cerrarModalReporte()" class="text-slate-400 hover:text-white p-2 cursor-pointer font-bold text-base">✕</button>
+                    <button onclick="imprimirReporteActual()" class="bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-lg shadow-blue-600/30">
+                        <i class="fa-solid fa-print"></i> Guardar PDF / Imprimir
+                    </button>
+                    <button onclick="cerrarModalReporte()" class="text-slate-400 hover:text-white px-2 py-1 cursor-pointer font-bold text-base">✕</button>
                 </div>
             </div>
-            <div id="modalReporteContenido" class="p-5 overflow-y-auto flex-1 bg-white text-slate-900 rounded-b-2xl">
-                <!-- Se inyecta dinámicamente -->
+            <div id="modalReporteContenido" class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white text-slate-900 rounded-b-2xl">
             </div>
         </div>
     </div>
@@ -270,9 +289,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // CONFIGURACIÓN E INICIALIZACIÓN DE FIREBASE
-        // ==========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBsffpYVYNV5YBgzqqPEWFtmp43cZTSgyo",
             authDomain: "nexo-erp-d4f75.firebaseapp.com",
@@ -285,16 +301,10 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        db.enablePersistence().catch(function(err) {
-            console.warn("No se pudo habilitar offline nativo: ", err);
-        });
-
-        // ==========================================
-        // LÓGICA DE LA APLICACIÓN
-        // ==========================================
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v12'; // Clave completamente nueva para barrer caché vieja
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_clean_v16';
 
         let DB = {
+            bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
             vendedorActivo: '',
             vendedoresPins: {
                 'Walter Coronel': '1234',
@@ -308,32 +318,36 @@
         };
 
         let carrito = {};
+        let soloPromosActivas = false;
+
+        function fmtMoneda(num) {
+            return '$ ' + Math.round(Number(num) || 0).toLocaleString('es-AR');
+        }
 
         function obtenerDatosProducto(p) {
             const id = p.id || p.codigo || p.sku || String(Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
-            const presentacion = p.grams || p.presentacion || p.unit || '-'; 
-            
-            // LECTURA DIRECTA DE LA FOTO DESDE EL ERP CENTRAL (state.catalog / exportaciones)
-            const img = p.img || p.imagen || p.image || '';
+            const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
+            const promoText = String(p.promoText || '').trim();
+            const isFeatured = Boolean(p.isFeatured || promoText.length > 0);
             
             const pvp = Number(p.pvp) || 0;
             const comisionPct = Number(p.sellerPct || p.comisionPct || 0);
             const comision = pvp > 0 ? (pvp * (comisionPct / 100)) : 0;
             const activo = (p.selectedForCatalog !== false && p.inCatalog !== false && p.activo !== false);
 
-            return { id, nombre, presentacion, img, pvp, comision, comisionPct, categoria: p.categoria || p.category || 'GENERAL', activo };
+            return {
+                id, nombre, presentacion, isFeatured, promoText,
+                pvp, comision, comisionPct,
+                categoria: p.categoria || p.category || 'GENERAL',
+                activo
+            };
         }
 
         function initApp() {
             try {
-                // Limpiamos cualquier caché vieja de versiones anteriores
-                localStorage.removeItem('nexo_preventa_db_v3');
-                localStorage.removeItem('nexo_preventa_db_v6');
-                localStorage.removeItem('nexo_preventa_db_v7');
-                localStorage.removeItem('nexo_preventa_db_v8');
-                localStorage.removeItem('nexo_preventa_db_v9');
-                localStorage.removeItem('nexo_preventa_db_v10');
+                // Limpiamos cachés anteriores
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -358,41 +372,37 @@
             iniciarEscuchaFirebase();
         }
 
+        function aplicarDatosDesdeFirebase(data) {
+            if (!data) return;
+            if (data.bizConfig) DB.bizConfig = data.bizConfig;
+            DB.catalogo = Array.isArray(data.catalog) ? data.catalog : [];
+            DB.clientes = Array.isArray(data.clients) ? data.clients : [];
+            DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+            
+            if (Array.isArray(data.orders) && DB.vendedorActivo) {
+                const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
+                DB.pedidosSemana = data.orders.filter(o => {
+                    const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
+                    return vendPed === vendedorActual;
+                });
+            }
+
+            saveDB();
+            
+            if (DB.vendedorActivo) {
+                actualizarDropdownClientes();
+                actualizarKpisSemanales();
+                renderCatalogo(document.getElementById('inputBuscarProd').value);
+            }
+        }
+
         function iniciarEscuchaFirebase() {
             db.collection('nexo_erp').doc('datos_globales').onSnapshot((doc) => {
                 if (doc.exists) {
-                    const data = doc.data();
-                    // CARGA ESTRICTA DEL CATÁLOGO UNIFICADO DEL ERP
-                    DB.catalogo = data.catalog || [];
-                    DB.clientes = data.clients || [];
-                    DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
-                    
-                    if (data.orders && Array.isArray(data.orders) && DB.vendedorActivo) {
-                        const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
-                        DB.pedidosSemana = data.orders.filter(o => {
-                            const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
-                            return vendPed === vendedorActual || !vendPed;
-                        });
-                    }
-
-                    saveDB();
-                    
-                    if (DB.vendedorActivo) {
-                        actualizarDropdownClientes();
-                        actualizarKpisSemanales();
-                        renderCatalogo(document.getElementById('inputBuscarProd').value);
-                    }
-                    
+                    aplicarDatosDesdeFirebase(doc.data());
                     const btnSync = document.getElementById('btnSync');
                     if (btnSync) {
-                        btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> Actualizado';
-                        btnSync.classList.replace('text-emerald-400', 'text-white');
-                        btnSync.classList.replace('bg-slate-800', 'bg-emerald-500');
-                        setTimeout(() => {
-                            btnSync.innerHTML = '<i class="fa-solid fa-cloud text-xs"></i> Firebase';
-                            btnSync.classList.replace('text-white', 'text-emerald-400');
-                            btnSync.classList.replace('bg-emerald-500', 'bg-slate-800');
-                        }, 2500);
+                        btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> En Vivo';
                     }
                 }
             });
@@ -405,73 +415,110 @@
             });
         }
 
+        function recargarDesdeFirebaseManual() {
+            const btnSync = document.getElementById('btnSync');
+            if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-xs"></i>...';
+            db.collection('nexo_erp').doc('datos_globales').get({ source: 'server' })
+                .then(doc => {
+                    if (doc.exists) aplicarDatosDesdeFirebase(doc.data());
+                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> En Vivo';
+                })
+                .catch(() => {
+                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud text-xs"></i> En Vivo';
+                });
+        }
+
         function saveDB() {
             try { localStorage.setItem(STORAGE_KEY_PREVENTA, JSON.stringify(DB)); } catch (e) {}
         }
 
-        // ==========================================
-        // GENERACIÓN DEL CATÁLOGO COMERCIAL UNIFICADO
-        // ==========================================
-        function abrirModalReporte(tipo) {
-            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
-            if(prods.length === 0) { alert('No hay productos disponibles.'); return; }
+        function setFiltroPromos(activarSoloPromos) {
+            soloPromosActivas = activarSoloPromos;
+            const btnTodos = document.getElementById('btnFiltroTodos');
+            const btnPromos = document.getElementById('btnFiltroPromos');
+            if (soloPromosActivas) {
+                btnPromos.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-amber-500 text-slate-950 shadow-md flex items-center justify-center gap-1.5';
+                btnTodos.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-slate-900 text-slate-300 border border-slate-800';
+            } else {
+                btnTodos.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-emerald-500 text-slate-950 shadow-md';
+                btnPromos.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-slate-900 text-amber-400 border border-amber-500/40 flex items-center justify-center gap-1.5';
+            }
+            renderCatalogo(document.getElementById('inputBuscarProd').value);
+        }
 
-            const tituloEl = document.getElementById('modalReporteTitulo');
+        // ===================================================================
+        // LISTA DE PRECIOS OFICIAL EN PDF (SIN IMÁGENES, LIVIANA Y CON PROMOS)
+        // ===================================================================
+        function abrirModalListaPrecios() {
+            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            if (prods.length === 0) {
+                alert('No hay productos activos cargados.');
+                return;
+            }
+
             const contenidoEl = document.getElementById('modalReporteContenido');
             const hoy = new Date().toLocaleDateString('es-AR');
-            const bizName = DB.vendedorActivo ? `Nexo Distribuidora (Preventa: ${DB.vendedorActivo})` : 'Nexo Distribuidora';
+            const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA / COMERCIO';
+            const bizContact = (DB.bizConfig && DB.bizConfig.contact) ? DB.bizConfig.contact : 'Presidencia Roque Sáenz Peña, Chaco';
 
             let html = `
-                <div class="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-end">
+                <div style="border-bottom: 2px solid #0f172a; padding-bottom: 10px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end;">
                     <div>
-                        <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase">${tipo === 'lista' ? 'Lista de Precios Oficial' : 'Catálogo Comercial con Fotos'}</span>
-                        <h2 class="text-base font-black uppercase text-slate-900 m-0 mt-1">${bizName}</h2>
-                        <p class="text-[10px] text-slate-500 m-0">Vigente al: ${hoy}</p>
+                        <span style="background: #dbeafe; color: #1e40af; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase;">Lista de Precios Oficial</span>
+                        <h1 style="font-size: 18px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 4px 0 0 0;">${bizName}</h1>
+                        <p style="font-size: 10px; color: #64748b; margin: 0;">${bizContact}</p>
+                    </div>
+                    <div style="text-align: right; font-size: 10px; color: #64748b;">
+                        Vigencia: <strong>${hoy}</strong>
                     </div>
                 </div>
             `;
 
+            const destacados = prods.filter(p => p.isFeatured);
+            if (destacados.length > 0) {
+                html += `
+                    <div style="margin-bottom: 16px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #f59e0b; background: #fffbeb;">
+                        <h3 style="font-size: 11px; font-weight: 900; color: #92400e; text-transform: uppercase; margin: 0 0 6px 0;">🔥 ACCIONES COMERCIALES Y PROMOCIONES</h3>
+                        <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+                            <tbody>
+                                ${destacados.map(p => `
+                                    <tr style="border-bottom: 1px solid #fde68a;">
+                                        <td style="padding: 5px 2px; font-weight: 800; color: #0f172a;">
+                                            ${p.nombre} <span style="font-weight:normal; color:#64748b; font-size:10px;">(${p.presentacion})</span>
+                                            ${p.promoText ? `<div style="color: #b45309; font-size: 10px; font-weight: 700;">⚡ ${p.promoText}</div>` : ''}
+                                        </td>
+                                        <td style="padding: 5px 2px; text-align: right; font-family: monospace; font-weight: 900; color: #047857; white-space: nowrap;">${fmtMoneda(p.pvp)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
             const agrupados = {};
             prods.forEach(p => {
                 const cat = (p.categoria || 'GENERAL').toUpperCase();
-                if(!agrupados[cat]) agrupados[cat] = [];
+                if (!agrupados[cat]) agrupados[cat] = [];
                 agrupados[cat].push(p);
             });
 
-            if (tipo === 'lista') {
-                tituloEl.innerHTML = '<i class="fa-solid fa-list text-blue-400"></i> Lista de Precios';
-                for (const cat of Object.keys(agrupados).sort()) {
-                    html += `<h3 class="text-xs font-black uppercase bg-slate-900 text-white px-2.5 py-1 rounded mt-3 mb-1.5">${cat}</h3>`;
-                    html += `<table class="w-full text-xs border-collapse mb-3"><thead><tr class="border-b border-slate-300 text-slate-600 uppercase text-[9px]"><th class="py-1 text-left">Artículo</th><th class="text-center">Presentación</th><th class="text-right">Precio Final</th></tr></thead><tbody>`;
-                    agrupados[cat].forEach(p => {
-                        html += `<tr class="border-b border-slate-100"><td class="py-1.5 font-bold text-slate-800">${p.nombre}</td><td class="text-center text-slate-500 text-[10px]">${p.presentacion}</td><td class="text-right font-mono font-black text-emerald-700">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</td></tr>`;
-                    });
-                    html += `</tbody></table>`;
-                }
-            } else {
-                tituloEl.innerHTML = '<i class="fa-solid fa-images text-emerald-400"></i> Catálogo Visual del ERP';
-                for (const cat of Object.keys(agrupados).sort()) {
-                    html += `<h3 class="text-xs font-black uppercase bg-slate-900 text-white px-2.5 py-1 rounded mt-4 mb-2">${cat}</h3>`;
-                    html += `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;">`;
-                    agrupados[cat].forEach(p => {
-                        const hasImg = p.img && p.img.length > 10;
-                        html += `
-                            <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; width: 31%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
-                                <div>
-                                    <div style="height: 90px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 6px; margin-bottom: 6px; overflow: hidden;">
-                                        ${hasImg ? `<img src="${p.img}" style="max-height: 85px; max-width: 100%; object-fit: contain;">` : `<span style="font-size: 9px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Sin Foto</span>`}
-                                    </div>
-                                    <strong style="font-size: 11px; color: #0f172a; display: block; line-height: 1.2; margin-bottom: 2px;">${p.nombre}</strong>
-                                    <span style="font-size: 9px; color: #64748b; display: block;">${p.presentacion}</span>
-                                </div>
-                                <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #f1f5f9; text-align: right;">
-                                    <span style="font-size: 12px; font-family: monospace; font-weight: 900; color: #047857;">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</span>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    html += `</div>`;
-                }
+            for (const cat of Object.keys(agrupados).sort()) {
+                html += `<h3 style="font-size: 11px; font-weight: 900; text-transform: uppercase; background: #0f172a; color: #fff; padding: 5px 8px; border-radius: 4px; margin-top: 12px; margin-bottom: 4px;">${cat}</h3>`;
+                html += `<table style="width: 100%; font-size: 11px; border-collapse: collapse; margin-bottom: 10px;"><thead><tr style="border-bottom: 1px solid #cbd5e1; color: #475569; text-transform: uppercase; font-size: 9px;"><th style="padding: 4px; text-align: left;">Artículo</th><th style="padding: 4px; text-align: center;">Presentación</th><th style="padding: 4px; text-align: right;">Precio Final</th></tr></thead><tbody>`;
+                agrupados[cat].forEach(p => {
+                    html += `
+                        <tr style="border-bottom: 1px solid #f1f5f9;">
+                            <td style="padding: 6px 4px; font-weight: 700; color: #1e293b;">
+                                ${p.nombre}
+                                ${p.isFeatured ? `<span style="background:#fef3c7; color:#92400e; font-size:9px; padding:1px 5px; border-radius:4px; margin-left:4px;">🔥 ${p.promoText || 'PROMO'}</span>` : ''}
+                            </td>
+                            <td style="padding: 6px 4px; text-align: center; color: #64748b; font-size: 10px;">${p.presentacion}</td>
+                            <td style="padding: 6px 4px; text-align: right; font-family: monospace; font-weight: 900; color: #047857; white-space: nowrap;">${fmtMoneda(p.pvp)}</td>
+                        </tr>
+                    `;
+                });
+                html += `</tbody></table>`;
             }
 
             contenidoEl.innerHTML = html;
@@ -482,41 +529,56 @@
             document.getElementById('modalReporteEmergente').classList.add('hidden');
         }
 
-        // IMPRESIÓN Y DESCARGA PDF BLINDADA PARA MÓVILES
         function imprimirReporteActual() {
             const contenido = document.getElementById('modalReporteContenido').innerHTML;
-            
-            const htmlCompleto = `
-                <!DOCTYPE html>
-                <html><head><title>Impresión de Reporte</title>
-                <style>
-                    body { font-family: sans-serif; color: #000; padding: 15px; background: #fff; margin: 0; }
-                    table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-                    th { border-bottom: 1.5px solid #000; text-align: left; padding: 4px; font-size: 10px; text-transform: uppercase; }
-                    td { border-bottom: 1px solid #ddd; padding: 6px 4px; font-size: 11px; }
-                    h3 { font-size: 12px; color: #fff; background: #000; padding: 4px 8px; text-transform: uppercase; margin-top: 15px; margin-bottom: 5px; border-radius: 3px; }
-                    div[style*="width: 31%"] { display: inline-block; width: 31%; margin-right: 1.5%; margin-bottom: 10px; vertical-align: top; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; box-sizing: border-box; }
-                </style>
-                </head><body>${contenido}
-                <script>
-                    window.onload = function() {
-                        setTimeout(() => { window.print(); }, 400);
-                    };
-                <\/script>
-                </body></html>
-            `;
-
-            const blob = new Blob([htmlCompleto], { type: 'text/html;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const win = window.open(url, '_blank');
-            if (!win) {
-                alert('El navegador bloqueó la ventana emergente. Permití las ventanas emergentes para este sitio.');
-            }
+            const areaImp = document.getElementById('areaImpresionNativa');
+            areaImp.innerHTML = contenido;
+            setTimeout(() => {
+                window.print();
+            }, 150);
         }
 
-        // ==========================================
-        // RESTO DE FUNCIONES (PIN, CLIENTES, PEDIDOS)
-        // ==========================================
+        function compartirTextoWhatsAppPreventa() {
+            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            if (prods.length === 0) return;
+
+            const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA';
+            let text = `📦 *${bizName.toUpperCase()}*\n`;
+            text += `📋 *LISTA DE PRECIOS & PROMOCIONES*\n`;
+            text += `📅 _${new Date().toLocaleDateString('es-AR')}_\n`;
+            text += `──────────────────\n\n`;
+
+            const featured = prods.filter(p => p.isFeatured);
+            if (featured.length > 0) {
+                text += `🔥 *OFERTAS Y ACCIONES COMERCIALES* 🔥\n`;
+                featured.forEach(p => {
+                    text += `⭐ *${p.nombre}* (${p.presentacion}): *${fmtMoneda(p.pvp)}*\n`;
+                    if (p.promoText) text += `   👉 _${p.promoText}_\n`;
+                });
+                text += `\n──────────────────\n\n`;
+            }
+
+            const grouped = {};
+            prods.forEach(p => {
+                const cat = p.categoria || 'General';
+                if (!grouped[cat]) grouped[cat] = [];
+                grouped[cat].push(p);
+            });
+
+            Object.keys(grouped).sort().forEach(cat => {
+                text += `🔹 *${cat.toUpperCase()}*\n`;
+                grouped[cat].forEach(p => {
+                    text += `  • ${p.nombre} (${p.presentacion}): *${fmtMoneda(p.pvp)}*\n`;
+                });
+                text += `\n`;
+            });
+
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        // ===================================================================
+        // PIN, CLIENTES Y LISTA DE PRODUCTOS CON RESALTADO DE PROMOCIONES
+        // ===================================================================
         function abrirCambioPinModal() {
             document.getElementById('pinActualInput').value = '';
             document.getElementById('pinNuevoInput').value = '';
@@ -536,15 +598,13 @@
             const pinEsperado = (DB.vendedoresPins && DB.vendedoresPins[DB.vendedorActivo]) || '1234';
 
             if (actual !== pinEsperado && actual !== '1234') {
-                alert('El PIN actual que ingresaste es incorrecto.');
+                alert('El PIN actual es incorrecto.');
                 return;
             }
-
             if (nuevo.length < 4) {
                 alert('Tu nuevo PIN debe tener al menos 4 caracteres.');
                 return;
             }
-
             if (nuevo !== conf) {
                 alert('Los nuevos PINs no coinciden.');
                 return;
@@ -555,19 +615,11 @@
             saveDB();
 
             if (typeof db !== 'undefined') {
-                db.collection('nexo_erp').doc('pines_vendedores').set(DB.vendedoresPins, { merge: true })
-                    .catch(e => console.warn("Modo offline", e));
+                db.collection('nexo_erp').doc('pines_vendedores').set(DB.vendedoresPins, { merge: true }).catch(() => {});
             }
 
             cerrarCambioPinModal();
-            alert('¡Tu contraseña fue actualizada con éxito!');
-        }
-
-        function forzarActualizacionVendedores() {
-            DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
-            saveDB();
-            mostrarPantallaLogin();
-            alert("Lista de vendedores actualizada correctamente.");
+            alert('¡Contraseña actualizada con éxito!');
         }
 
         function mostrarPantallaLogin() {
@@ -582,12 +634,7 @@
                     sel.value = DB.vendedorActivo;
                 }
             }
-
-            if (pinInput) {
-                pinInput.value = '';
-                setTimeout(() => pinInput.focus(), 150);
-            }
-
+            if (pinInput) pinInput.value = '';
             if (loginModal) loginModal.classList.remove('hidden');
         }
 
@@ -604,7 +651,6 @@
             if (!vendedorElegido) { alert('Elegí un vendedor.'); return; }
 
             const pinEsperado = (DB.vendedoresPins && DB.vendedoresPins[vendedorElegido]) || '1234';
-
             if (pinIngresado !== pinEsperado && pinIngresado !== '1234') {
                 alert('Contraseña incorrecta.');
                 if (pinInput) pinInput.value = '';
@@ -620,6 +666,7 @@
             actualizarKpisSemanales();
             renderCatalogo();
             actualizarBarraCarrito();
+            recargarDesdeFirebaseManual();
         }
 
         function bloquearSesion() {
@@ -695,9 +742,7 @@
             document.getElementById('selCliente').value = nuevo.id;
 
             if (typeof db !== 'undefined') {
-                db.collection('clientes_nuevos').add(nuevo)
-                    .then(() => console.log("Cliente nuevo enviado al ERP"))
-                    .catch(e => console.warn("Guardado offline", e));
+                db.collection('clientes_nuevos').add(nuevo).catch(() => {});
             }
         }
 
@@ -706,22 +751,51 @@
             if (!container) return;
 
             const prodsDisponibles = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            const cantPromos = prodsDisponibles.filter(p => p.isFeatured).length;
+            const badgePromos = document.getElementById('badgeCantPromos');
+            if (badgePromos) badgePromos.textContent = cantPromos;
+
             const q = query.trim().toLowerCase();
-            const filtrados = prodsDisponibles.filter(p => !q || p.nombre.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q));
+            let filtrados = prodsDisponibles.filter(p => !q || p.nombre.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q) || p.promoText.toLowerCase().includes(q));
+
+            if (soloPromosActivas) {
+                filtrados = filtrados.filter(p => p.isFeatured);
+            }
 
             if (filtrados.length === 0) {
-                container.innerHTML = `<div class="p-8 text-center text-slate-500 italic text-xs bg-slate-900 rounded-2xl border border-slate-800">No hay productos disponibles.</div>`;
+                container.innerHTML = `<div class="p-8 text-center text-slate-500 italic text-xs bg-slate-900 rounded-2xl border border-slate-800">${soloPromosActivas ? 'No hay acciones comerciales activas en este momento.' : 'No hay productos disponibles.'}</div>`;
                 return;
             }
 
+            // Ordenamos para que los productos con acción comercial aparezcan siempre primero
+            filtrados.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
+
             container.innerHTML = filtrados.map(p => {
                 const qty = carrito[p.id] || 0;
+                const cardStyle = p.isFeatured
+                    ? 'bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border-2 border-amber-500/80 shadow-lg shadow-amber-500/10'
+                    : 'bg-slate-900 border border-slate-800 shadow-md';
+
                 return `
-                    <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl shadow-md flex items-center justify-between gap-3 transition">
+                    <div class="${cardStyle} p-3.5 rounded-2xl flex items-center justify-between gap-3 transition relative overflow-hidden">
                         <div class="flex-1 min-w-0">
-                            <span class="text-xs font-bold text-white block truncate">${p.nombre}</span>
-                            <div class="flex items-center gap-2 mt-1">
-                                <span class="text-base font-black font-mono text-slate-100">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</span>
+                            ${p.isFeatured ? `
+                                <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 font-black text-[9px] uppercase tracking-wider mb-1 shadow">
+                                    <i class="fa-solid fa-fire"></i> ACCIÓN COMERCIAL / PROMO
+                                </div>
+                            ` : ''}
+                            <span class="text-xs font-extrabold text-white block truncate">${p.nombre}</span>
+                            <span class="text-[10px] text-slate-400 block">${p.presentacion} • ${p.categoria}</span>
+                            
+                            ${p.isFeatured && p.promoText ? `
+                                <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-200 text-[11px] font-bold flex items-center gap-1.5">
+                                    <i class="fa-solid fa-bolt text-amber-400"></i>
+                                    <span>${p.promoText}</span>
+                                </div>
+                            ` : ''}
+
+                            <div class="flex items-center gap-2 mt-1.5">
+                                <span class="text-base font-black font-mono text-white">${fmtMoneda(p.pvp)}</span>
                                 <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
                                     +$ ${Math.round(p.comision).toLocaleString('es-AR')} (${p.comisionPct}%)
                                 </span>
@@ -776,7 +850,7 @@
             });
 
             document.getElementById('txtItemsEnCarrito').textContent = `${totalUnidades} bultos`;
-            document.getElementById('txtTotalCarrito').textContent = `$ ${Math.round(totalDinero).toLocaleString('es-AR')}`;
+            document.getElementById('txtTotalCarrito').textContent = fmtMoneda(totalDinero);
             const btnVer = document.getElementById('btnVerPedido');
             if (btnVer) { btnVer.disabled = (totalUnidades === 0); btnVer.style.opacity = (totalUnidades === 0) ? '0.5' : '1'; }
         }
@@ -803,12 +877,12 @@
                     const pvp = p ? p.pvp : 0;
                     const sub = pvp * cant;
                     grandTotal += sub;
-                    itemsHtml += `<div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"><div><strong class="text-white block">${p ? p.nombre : 'Artículo'}</strong><span class="text-[10px] text-slate-400 font-mono">${cant} un. x $ ${Math.round(pvp).toLocaleString('es-AR')}</span></div><span class="font-mono font-bold text-emerald-400">$ ${Math.round(sub).toLocaleString('es-AR')}</span></div>`;
+                    itemsHtml += `<div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"><div><strong class="text-white block">${p ? p.nombre : 'Artículo'}</strong><span class="text-[10px] text-slate-400 font-mono">${cant} un. x ${fmtMoneda(pvp)}</span></div><span class="font-mono font-bold text-emerald-400">${fmtMoneda(sub)}</span></div>`;
                 }
             });
 
             listCont.innerHTML = itemsHtml;
-            document.getElementById('resumenModalTotal').textContent = `$ ${Math.round(grandTotal).toLocaleString('es-AR')}`;
+            document.getElementById('resumenModalTotal').textContent = fmtMoneda(grandTotal);
             
             const nowLocal = new Date();
             nowLocal.setMinutes(nowLocal.getMinutes() - nowLocal.getTimezoneOffset());
@@ -859,9 +933,7 @@
                 observacion: obs
             };
 
-            db.collection('pedidos').add(nuevoPedido)
-                .then(() => console.log("Pedido subido a Firebase"))
-                .catch((error) => console.warn("Guardado offline", error));
+            db.collection('pedidos').add(nuevoPedido).catch(() => {});
 
             DB.pedidosSemana = DB.pedidosSemana || [];
             DB.pedidosSemana.push(nuevoPedido);
@@ -874,7 +946,7 @@
             actualizarBarraCarrito();
             renderCatalogo(document.getElementById('inputBuscarProd').value);
             
-            alert('¡Pedido registrado con éxito!');
+            alert('¡Pedido enviado al ERP con éxito!');
         }
 
         function actualizarKpisSemanales() {
@@ -890,15 +962,15 @@
                 }
             });
 
-            document.getElementById('kpiVentaSemanal').textContent = `$ ${Math.round(totalVenta).toLocaleString('es-AR')}`;
+            document.getElementById('kpiVentaSemanal').textContent = fmtMoneda(totalVenta);
             document.getElementById('kpiCantPedidosSemanal').textContent = `${pedidos.length} pedido${pedidos.length === 1 ? '' : 's'}`;
-            document.getElementById('kpiComisionSemanal').textContent = `$ ${Math.round(totalComision).toLocaleString('es-AR')}`;
+            document.getElementById('kpiComisionSemanal').textContent = fmtMoneda(totalComision);
             const pct = totalVenta > 0 ? ((totalComision / totalVenta) * 100).toFixed(1) : 0;
             document.getElementById('kpiPctComisionProm').textContent = `${pct}% prom.`;
         }
 
         function reiniciarSemana() {
-            if (confirm(`¿Reiniciar semana para ${DB.vendedorActivo}?`)) {
+            if (confirm(`¿Reiniciar vista semanal para ${DB.vendedorActivo}?`)) {
                 DB.pedidosSemana = [];
                 saveDB();
                 actualizarKpisSemanales();
