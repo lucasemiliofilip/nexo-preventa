@@ -11,7 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-    <!-- GENERADOR DE ARCHIVOS PDF CLIENTE -->
+    <!-- GENERADOR DE ARCHIVOS PDF PARA MÓVILES -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
@@ -180,7 +180,7 @@
         </div>
     </div>
 
-    <!-- MODAL LISTA DE PRECIOS CON ENVÍO DIRECTO DE ARCHIVO PDF -->
+    <!-- MODAL VISTA PREVIA LISTA DE PRECIOS -->
     <div id="modalReporteEmergente" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
         <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl flex flex-col shadow-2xl max-h-[92vh]">
             <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-800 p-3.5 bg-slate-950 rounded-t-2xl">
@@ -284,10 +284,10 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_sync_v19';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v21';
 
         let DB = {
-            bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
+            bizConfig: { name: 'MI DISTRIBUIDORA / COMMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
             vendedorActivo: '',
             vendedoresPins: {
                 'Walter Coronel': '1234',
@@ -311,8 +311,8 @@
             const id = p.id || p.codigo || p.sku || String(Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
+            const stock = Number(p.stock) || 0;
             
-            // SOLO ES PROMOCIÓN SI EL CHECKBOX "🔥 Promo" ESTÁ ACTIVO EN EL ERP
             const isFeatured = (p.isFeatured === true);
             const promoText = isFeatured ? String(p.promoText || '').trim() : '';
             
@@ -322,7 +322,7 @@
             const activo = (p.selectedForCatalog !== false && p.inCatalog !== false && p.activo !== false);
 
             return {
-                id, nombre, presentacion, isFeatured, promoText,
+                id, nombre, presentacion, stock, isFeatured, promoText,
                 pvp, comision, comisionPct,
                 categoria: p.categoria || p.category || 'GENERAL',
                 activo
@@ -331,7 +331,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -385,9 +385,7 @@
                 if (doc.exists) {
                     aplicarDatosDesdeFirebase(doc.data());
                     const btnSync = document.getElementById('btnSync');
-                    if (btnSync) {
-                        btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> En Vivo';
-                    }
+                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> En Vivo';
                 }
             });
 
@@ -431,7 +429,7 @@
         }
 
         // ===================================================================
-        // VISTA PREVIA Y ENVÍO DEL ARCHIVO PDF DIRECTO A WHATSAPP
+        // VISTA PREVIA Y COMPARTIR ARCHIVO PDF DIRECTO POR WHATSAPP
         // ===================================================================
         function abrirModalListaPrecios() {
             const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
@@ -446,7 +444,7 @@
             const bizContact = (DB.bizConfig && DB.bizConfig.contact) ? DB.bizConfig.contact : 'Presidencia Roque Sáenz Peña, Chaco';
 
             let html = `
-                <div id="hojaImprimiblePDF" style="background:#ffffff; color:#0f172a; padding:4px; font-family:sans-serif;">
+                <div id="hojaImprimiblePDF" style="background:#ffffff; color:#0f172a; padding:6px; font-family:sans-serif;">
                     <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end;">
                         <div>
                             <span style="background: #dbeafe; color: #1e40af; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase;">Lista de Precios Oficial</span>
@@ -577,7 +575,7 @@
         }
 
         // ===================================================================
-        // PIN, CLIENTES Y REGISTRO DE PEDIDOS
+        // PIN, CLIENTES Y REGISTRO DE PEDIDOS (ADVERTENCIA DE STOCK SIN BLOQUEO)
         // ===================================================================
         function abrirCambioPinModal() {
             document.getElementById('pinActualInput').value = '';
@@ -775,6 +773,8 @@
                     ? 'bg-gradient-to-r from-amber-950/40 via-slate-900 to-slate-900 border-2 border-amber-500/80 shadow-lg shadow-amber-500/10'
                     : 'bg-slate-900 border border-slate-800 shadow-md';
 
+                const stockBadgeColor = p.stock > 0 ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' : 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+
                 return `
                     <div class="${cardStyle} p-3.5 rounded-2xl flex items-center justify-between gap-3 transition relative overflow-hidden">
                         <div class="flex-1 min-w-0">
@@ -783,7 +783,12 @@
                                     <i class="fa-solid fa-fire"></i> ACCIÓN COMERCIAL / PROMO
                                 </div>
                             ` : ''}
-                            <span class="text-xs font-extrabold text-white block truncate">${p.nombre}</span>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-extrabold text-white truncate">${p.nombre}</span>
+                                <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${stockBadgeColor} flex-shrink-0">
+                                    Stock: ${p.stock}
+                                </span>
+                            </div>
                             <span class="text-[10px] text-slate-400 block">${p.presentacion} • ${p.categoria}</span>
                             
                             ${p.isFeatured && p.promoText ? `
@@ -813,7 +818,19 @@
         function modificarCantidad(id, delta) {
             const cur = carrito[id] || 0;
             const next = cur + delta;
-            if (next <= 0) delete carrito[id]; else carrito[id] = next;
+            if (next <= 0) {
+                delete carrito[id];
+            } else {
+                // ADVERTENCIA SUAVE SI SUPERA EL STOCK (PERO PERMITE CARGAR IGUAL)
+                const prod = (DB.catalogo || []).map(obtenerDatosProducto).find(x => String(x.id) === String(id));
+                if (prod && next > prod.stock) {
+                    // Solo mostramos un aviso sutil la primera vez que cruza el límite o al sumar
+                    if (delta > 0 && cur === prod.stock) {
+                        alert(`⚠️ Aviso: Estás pidiendo ${next} unidades de "${prod.nombre}", pero en stock figuran ${prod.stock}. El pedido se cargará igual.`);
+                    }
+                }
+                carrito[id] = next;
+            }
 
             const qtyEl = document.getElementById(`qty-${id}`);
             if (qtyEl) {
@@ -954,7 +971,7 @@
             const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
 
             pedidos.forEach(p => {
-                const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
+                const vendPed = (p.vendedor || p.vendedor || '').toLowerCase().trim();
                 if (vendPed === vendedorActual || !vendPed) {
                     totalVenta += (Number(p.total_venta || p.total) || 0);
                     totalComision += (Number(p.comision_vendedor || p.sellerCommission) || 0);
