@@ -282,7 +282,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v22';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v23';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -294,6 +294,7 @@
             },
             catalogo: [],
             clientes: [],
+            clientesLocalesNuevos: [],
             vendedores: ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'],
             pedidosSemana: []
         };
@@ -309,7 +310,7 @@
             const id = p.id || p.codigo || p.sku || String(Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
-            const stock = Number(p.stock) || 0;
+            const stock = !isNaN(Number(p.stock)) ? Number(p.stock) : 0;
             
             const isFeatured = (p.isFeatured === true);
             const promoText = isFeatured ? String(p.promoText || '').trim() : '';
@@ -329,7 +330,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -339,6 +340,7 @@
             } catch (e) {}
 
             DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+            DB.clientesLocalesNuevos = Array.isArray(DB.clientesLocalesNuevos) ? DB.clientesLocalesNuevos : [];
             
             if (!DB.vendedorActivo) {
                 mostrarPantallaLogin();
@@ -354,22 +356,19 @@
             iniciarEscuchaFirebase();
         }
 
-        // FUNCIÓN CLAVE: OBTIENE EL SÁBADO DE LA SEMANA ACTUAL A LAS 04:00 AM COMO LÍMITE DE CORTE
         function obtenerInicioSemanaComercialActual() {
             const ahora = new Date();
-            const diaSemana = ahora.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+            const diaSemana = ahora.getDay();
             const hora = ahora.getHours();
 
-            // Si es Sábado y ya pasaron las 04:00 AM, el ciclo actual arranca este mismo Sábado a las 04:00 AM.
-            // Si es antes de las 04:00 AM del Sábado (o cualquier otro día anterior), arranca el Sábado de la semana pasada.
             const inicio = new Date(ahora);
             let diasAjuste = (diaSemana === 6 && hora >= 4) ? 0 : (diaSemana + 1);
             if (diaSemana !== 6) {
-                diasAjuste = diaSemana + 1; // Ajuste para retroceder al sábado previo
+                diasAjuste = diaSemana + 1;
             }
             
             inicio.setDate(inicio.getDate() - diasAjuste);
-            inicio.setHours(4, 0, 0, 0); // Sábado a las 04:00 AM
+            inicio.setHours(4, 0, 0, 0);
             return inicio;
         }
 
@@ -377,14 +376,20 @@
             if (!data) return;
             if (data.bizConfig) DB.bizConfig = data.bizConfig;
             DB.catalogo = Array.isArray(data.catalog) ? data.catalog : [];
-            DB.clientes = Array.isArray(data.clients) ? data.clients : [];
+            
+            const clientesNube = Array.isArray(data.clients) ? data.clients : [];
+            const localesPendientes = (DB.clientesLocalesNuevos || []).filter(loc => 
+                !clientesNube.some(c => String(c.id) === String(loc.id) || (c.name || c.nombre || '').toLowerCase().trim() === (loc.name || loc.nombre || '').toLowerCase().trim())
+            );
+            DB.clientesLocalesNuevos = localesPendientes;
+            DB.clientes = [...clientesNube, ...localesPendientes];
+
             DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
             
             if (Array.isArray(data.orders) && DB.vendedorActivo) {
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
 
-                // FILTRADO AUTOMÁTICO: Solo acumula los pedidos cargados a partir del sábado a las 04:00 AM
                 DB.pedidosSemana = data.orders.filter(o => {
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
                     if (vendPed !== vendedorActual) return false;
@@ -731,7 +736,9 @@
                     }).join('');
             }
 
-            if (currentVal) sel.value = currentVal;
+            if (currentVal && misClientes.some(c => String(c.id) === String(currentVal))) {
+                sel.value = currentVal;
+            }
         }
 
         function abrirNuevoClienteModal() {
@@ -740,27 +747,34 @@
             const direccion = prompt('Dirección de entrega:') || '';
             const telefono = prompt('Teléfono de contacto:') || '';
 
-            const addrWithSeller = direccion.trim() + (DB.vendedorActivo ? ` ||| ${DB.vendedorActivo}` : '');
+            const vendedorAsignado = DB.vendedorActivo || 'Mostrador';
+            const addrWithSeller = direccion.trim() + (vendedorAsignado ? ` ||| ${vendedorAsignado}` : '');
+            const nuevoId = String(Date.now());
 
             const nuevo = {
-                id: Date.now(),
+                id: nuevoId,
                 name: nombre.trim(),
                 nombre: nombre.trim(),
                 addr: addrWithSeller,
                 direccion: addrWithSeller,
                 phone: telefono.trim(),
-                seller: DB.vendedorActivo,
-                vendedor: DB.vendedorActivo
+                telefono: telefono.trim(),
+                seller: vendedorAsignado,
+                vendedor: vendedorAsignado
             };
 
             DB.clientes = DB.clientes || [];
             DB.clientes.push(nuevo);
+            DB.clientesLocalesNuevos = DB.clientesLocalesNuevos || [];
+            DB.clientesLocalesNuevos.push(nuevo);
             saveDB();
+
             actualizarDropdownClientes();
-            document.getElementById('selCliente').value = nuevo.id;
+            document.getElementById('selCliente').value = nuevoId;
 
             if (typeof db !== 'undefined') {
-                db.collection('clientes_nuevos').add(nuevo).catch(() => {});
+                const payloadCli = JSON.parse(JSON.stringify(nuevo));
+                db.collection('clientes_nuevos').add(payloadCli).catch(() => {});
             }
         }
 
@@ -842,10 +856,9 @@
                 delete carrito[id];
             } else {
                 const prod = (DB.catalogo || []).map(obtenerDatosProducto).find(x => String(x.id) === String(id));
-                if (prod && next > prod.stock) {
-                    if (delta > 0 && cur === prod.stock) {
-                        alert(`⚠️ Aviso: Estás pidiendo ${next} unidades de "${prod.nombre}", pero en stock figuran ${prod.stock}. El pedido se cargará igual.`);
-                    }
+                const topeAviso = prod ? Math.max(0, prod.stock) : 0;
+                if (prod && next > prod.stock && delta > 0 && cur === topeAviso) {
+                    alert(`⚠️ Aviso: Estás pidiendo ${next} unidades de "${prod.nombre}", pero en stock figuran ${prod.stock}. El pedido se cargará igual y dejará el stock en negativo.`);
                 }
                 carrito[id] = next;
             }
@@ -927,47 +940,82 @@
 
         function cerrarResumenPedidoModal() { document.getElementById('modalResumenPedido').classList.add('hidden'); }
 
-        function confirmarYGuardarPedido() {
-            const clienteId = document.getElementById('selCliente').value;
+        async function confirmarYGuardarPedido() {
+            const clienteId = document.getElementById('selCliente')?.value || '';
             const cliente = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
-            const obs = document.getElementById('txtPedidoObservacion').value.trim();
-            const fechaEntrega = document.getElementById('txtPedidoFechaEntrega').value;
+            const nombreFallback = document.getElementById('resumenModalClienteNombre')?.textContent || 'Cliente General';
+            const dirFallback = document.getElementById('resumenModalClienteDir')?.textContent || '';
+
+            const obs = (document.getElementById('txtPedidoObservacion')?.value || '').trim();
+            const fechaEntrega = document.getElementById('txtPedidoFechaEntrega')?.value || '';
 
             let itemsPedido = [], totalPedido = 0, comisionPedido = 0;
             const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
 
             Object.keys(carrito).forEach(id => {
-                const cant = carrito[id] || 0;
+                const cant = Number(carrito[id]) || 0;
                 if (cant > 0) {
                     const p = catalogMap.find(x => String(x.id) === String(id));
-                    const pvp = p ? p.pvp : 0;
-                    const comm = p ? p.comision : 0;
+                    const pvp = p ? (Number(p.pvp) || 0) : 0;
+                    const comm = p ? (Number(p.comision) || 0) : 0;
                     const sub = pvp * cant;
-                    itemsPedido.push({ id_producto: id, descripcion: p ? p.nombre : 'Artículo', cantidad: cant, precio_unitario: pvp, subtotal: sub, comision: comm * cant });
+                    itemsPedido.push({
+                        id_producto: String(id),
+                        descripcion: p ? String(p.nombre || 'Artículo') : 'Artículo',
+                        cantidad: cant,
+                        precio_unitario: pvp,
+                        subtotal: sub,
+                        comision: comm * cant
+                    });
                     totalPedido += sub;
                     comisionPedido += (comm * cant);
+
+                    // Descuenta stock localmente en el celular permitiendo stock negativo
+                    const rawProd = (DB.catalogo || []).find(x => String(x.id || x.codigo || x.sku) === String(id));
+                    if (rawProd) {
+                        rawProd.stock = (Number(rawProd.stock) || 0) - cant;
+                    }
                 }
             });
 
-            const rawAddr = cliente ? (cliente.addr || cliente.direccion || '') : '';
-            const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
+            if (itemsPedido.length === 0) {
+                alert('Agregá al menos un artículo al pedido.');
+                return;
+            }
+
+            const rawAddr = cliente ? String(cliente.addr || cliente.direccion || '') : dirFallback;
+            const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr.trim();
+            const nombreCliente = cliente ? String(cliente.name || cliente.nombre || nombreFallback) : nombreFallback;
+            const telCliente = cliente ? String(cliente.phone || cliente.telefono || '') : '';
 
             const now = new Date();
             const fechaLocal = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19);
 
-            const nuevoPedido = {
-                id: Date.now(),
-                fecha: fechaLocal,
-                fecha_entrega: fechaEntrega,
-                cliente: { id: clienteId, nombre: cliente ? (cliente.name || cliente.nombre) : 'Cliente', direccion: addrLimpia, telefono: cliente ? (cliente.phone || cliente.telefono) : '' },
-                vendedor: DB.vendedorActivo,
+            // Sanitizamos el objeto completo para evitar cualquier campo undefined en Firebase
+            const nuevoPedido = JSON.parse(JSON.stringify({
+                id: String(Date.now()),
+                fecha: String(fechaLocal || ''),
+                fecha_entrega: String(fechaEntrega || ''),
+                cliente: {
+                    id: String(clienteId || Date.now()),
+                    nombre: String(nombreCliente || 'Cliente'),
+                    direccion: String(addrLimpia || ''),
+                    telefono: String(telCliente || '')
+                },
+                vendedor: String(DB.vendedorActivo || 'Mostrador'),
                 items: itemsPedido,
-                total_venta: totalPedido,
-                comision_vendedor: comisionPedido,
-                observacion: obs
-            };
+                total_venta: Number(totalPedido) || 0,
+                comision_vendedor: Number(comisionPedido) || 0,
+                observacion: String(obs || '')
+            }));
 
-            db.collection('pedidos').add(nuevoPedido).catch(() => {});
+            try {
+                await db.collection('pedidos').add(nuevoPedido);
+            } catch (err) {
+                console.error('Error al subir pedido:', err);
+                alert('❌ Error al enviar el pedido a la nube: ' + (err.message || err));
+                return;
+            }
 
             DB.pedidosSemana = DB.pedidosSemana || [];
             DB.pedidosSemana.push(nuevoPedido);
@@ -989,7 +1037,7 @@
             const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
 
             pedidos.forEach(p => {
-                const vendPed = (p.vendedor || p.vendedor || '').toLowerCase().trim();
+                const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
                 if (vendPed === vendedorActual || !vendPed) {
                     totalVenta += (Number(p.total_venta || p.total) || 0);
                     totalComision += (Number(p.comision_vendedor || p.sellerCommission) || 0);
