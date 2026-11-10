@@ -282,7 +282,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v24';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v25';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -330,7 +330,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -390,7 +390,6 @@
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
 
-                // FILTRADO TOLERANTE DE PEDIDOS SEMANALES
                 DB.pedidosSemana = data.orders.filter(o => {
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
                     if (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed)) return false;
@@ -715,31 +714,34 @@
             const todos = DB.clientes || [];
             const activo = (DB.vendedorActivo || '').toLowerCase().trim();
 
-            // MOSTRAR TODOS LOS CLIENTES SI EL VENDEDOR ACTIVO ES LUCAS FILIP O WALTER CORONEL (TOLERANCIA TOTAL)
+            // FILTRADO ESTRICTO POR CARTERA DE VENDEDOR
             const misClientes = todos.filter(c => {
                 let vendCliente = (c.seller || c.vendedor || '').toLowerCase().trim();
                 const rawAddr = c.addr || c.direccion || '';
                 if (!vendCliente && rawAddr.includes('|||')) {
                     vendCliente = rawAddr.split('|||')[1].toLowerCase().trim();
                 }
-                if (!vendCliente) return true; // Si no tiene vendedor asignado, lo ve cualquiera para evitar bloqueos
-                return vendCliente.includes(activo) || activo.includes(vendCliente);
+                // Si el cliente no tiene vendedor asignado, o si el vendedor asignado coincide exactamente con el activo
+                if (!vendCliente) return true; 
+                return vendCliente === activo;
             });
 
             if (badgeCant) badgeCant.textContent = `${misClientes.length} de ${todos.length}`;
 
-            if (todos.length === 0) {
-                sel.innerHTML = '<option value="">-- No hay clientes cargados (Tocá + Nuevo) --</option>';
+            if (misClientes.length === 0) {
+                sel.innerHTML = '<option value="">-- No tenés clientes en tu cartera (Tocá + Nuevo) --</option>';
             } else {
                 sel.innerHTML = '<option value="">-- Seleccionar cliente (' + misClientes.length + ') --</option>' +
-                    todos.map(c => {
+                    misClientes.map(c => {
                         const rawAddr = c.addr || c.direccion || '';
                         const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
                         return `<option value="${c.id}">${c.name || c.nombre} ${addrLimpia ? `(${addrLimpia})` : ''}</option>`;
                     }).join('');
             }
 
-            if (currentVal) sel.value = currentVal;
+            if (currentVal && misClientes.some(c => String(c.id) === String(currentVal))) {
+                sel.value = currentVal;
+            }
         }
 
         function abrirNuevoClienteModal() {
@@ -1037,7 +1039,6 @@
 
             pedidos.forEach(p => {
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
-                // Comparación tolerante: permite que cuente si coincide parcialmente o si no está definido
                 if (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) {
                     totalVenta += (Number(p.total_venta || p.total) || 0);
                     totalComision += (Number(p.comision_vendedor || p.sellerCommission) || 0);
