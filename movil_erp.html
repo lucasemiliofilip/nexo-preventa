@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo ERP Móvil - Actualizador de Precios</title>
+    <title>Nexo ERP Móvil - Costos & Stock</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -27,7 +27,7 @@
                 </div>
                 <div>
                     <h1 class="text-sm font-extrabold text-white leading-tight">Nexo ERP Móvil</h1>
-                    <span id="txtEstadoNube" class="text-[10px] text-cyan-400 font-mono">Conectando a la nube...</span>
+                    <span id="txtEstadoNube" class="text-[10px] text-cyan-400 font-mono">Conectando...</span>
                 </div>
             </div>
             <button onclick="abrirModalNuevoProducto()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition shadow-md cursor-pointer">
@@ -43,7 +43,7 @@
             <input 
                 type="text" 
                 id="inputBuscarProdMovil" 
-                placeholder="Buscar producto, proveedor o categoría..." 
+                placeholder="Buscar producto o proveedor..." 
                 oninput="filtrarCatalogoMovil(this.value)"
                 class="input-mobile w-full pl-9 pr-4 py-3 text-xs text-white placeholder-slate-500 outline-none"
             >
@@ -53,12 +53,12 @@
         <div id="listaProductosMovil" class="space-y-3"></div>
     </main>
 
-    <!-- MODAL EDITAR PRODUCTO / PRECIOS -->
+    <!-- MODAL EDITAR COSTO Y STOCK -->
     <div id="modalEditarProd" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-3">
-        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
                 <h3 class="text-sm font-black uppercase text-white flex items-center gap-2">
-                    <i class="fa-solid fa-pen-to-square text-cyan-400"></i> Editar Costo y Precio
+                    <i class="fa-solid fa-pen-to-square text-cyan-400"></i> Actualizar Costo & Stock
                 </h3>
                 <button onclick="cerrarModalEditar()" class="text-slate-400 hover:text-white p-1 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
             </div>
@@ -67,48 +67,31 @@
 
             <div class="space-y-3 text-xs">
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nombre del Producto:</label>
-                    <input type="text" id="editProdNombre" class="input-mobile w-full p-2.5 text-xs font-bold text-white outline-none">
+                    <span id="editProdNombre" class="text-xs font-extrabold text-white block bg-slate-950 p-2.5 rounded-xl border border-slate-800"></span>
                 </div>
 
-                <div class="grid grid-cols-2 gap-2">
+                <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Presentación:</label>
-                        <input type="text" id="editProdGrams" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
+                        <label class="block text-[10px] font-bold text-cyan-400 mb-1">Nuevo Costo Neto ($):</label>
+                        <input type="number" step="any" id="editProdCosto" class="input-mobile w-full p-3 text-base font-mono font-bold text-cyan-300 outline-none text-center">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Proveedor:</label>
-                        <input type="text" id="editProdSupplier" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
+                        <label class="block text-[10px] font-bold text-emerald-400 mb-1">Stock Disponible:</label>
+                        <input type="number" step="any" id="editProdStock" class="input-mobile w-full p-3 text-base font-mono font-bold text-white outline-none text-center">
                     </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-[10px] font-bold text-cyan-400 mb-1">Costo Neto ($):</label>
-                        <input type="number" step="any" id="editProdCosto" oninput="recalcularPvpAutomaticoMovil()" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-cyan-300 outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-emerald-400 mb-1">Precio Venta PVP ($):</label>
-                        <input type="number" step="any" id="editProdPVP" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-emerald-400 outline-none">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Stock Actual (Depósito):</label>
-                    <input type="number" step="any" id="editProdStock" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-white outline-none">
                 </div>
             </div>
 
             <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800">
                 <button onclick="cerrarModalEditar()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">Cancelar</button>
-                <button onclick="guardarCambiosProductoMovil()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 active:scale-95 cursor-pointer">Guardar Cambios</button>
+                <button onclick="guardarCostoestockMovil()" class="bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-cyan-500/20 active:scale-95 cursor-pointer">Guardar Cambios</button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL NUEVO PRODUCTO -->
+    <!-- MODAL NUEVO PRODUCTO RÁPIDO -->
     <div id="modalNuevoProd" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-3">
-        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
                 <h3 class="text-sm font-black uppercase text-white flex items-center gap-2">
                     <i class="fa-solid fa-box-open text-emerald-400"></i> Nuevo Producto
@@ -118,7 +101,7 @@
 
             <div class="space-y-3 text-xs">
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nombre del Artículo *:</label>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nombre *:</label>
                     <input type="text" id="newProdNombre" placeholder="Ej: Arroz Especial 1kg" class="input-mobile w-full p-2.5 text-xs font-bold text-white outline-none">
                 </div>
 
@@ -135,22 +118,11 @@
 
                 <div class="grid grid-cols-2 gap-2">
                     <div>
-                        <label class="block text-[10px] font-bold text-cyan-400 mb-1">Costo Unitario ($):</label>
+                        <label class="block text-[10px] font-bold text-cyan-400 mb-1">Costo Neto ($):</label>
                         <input type="number" step="any" id="newProdCosto" value="0" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-cyan-300 outline-none">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-emerald-400 mb-1">Precio Venta PVP ($):</label>
-                        <input type="number" step="any" id="newProdPVP" value="0" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-emerald-400 outline-none">
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Presentación:</label>
-                        <input type="text" id="newProdGrams" value="Unidad" class="input-mobile w-full p-2.5 text-xs text-white outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-bold text-slate-400 mb-1">Stock Inicial:</label>
+                        <label class="block text-[10px] font-bold text-emerald-400 mb-1">Stock Inicial:</label>
                         <input type="number" id="newProdStock" value="10" class="input-mobile w-full p-2.5 text-sm font-mono font-bold text-white outline-none">
                     </div>
                 </div>
@@ -216,14 +188,14 @@
                 <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center justify-between gap-3 shadow-md">
                     <div class="flex-1 min-w-0">
                         <strong class="text-xs text-white block truncate">${p.name}</strong>
-                        <span class="text-[10px] text-slate-400 block">${p.grams || 'Unidad'} • Stock: <strong>${p.stock || 0}</strong> • <strong class="text-amber-400">${p.supplier || 'Sin Proveedor'}</strong></span>
+                        <span class="text-[10px] text-slate-400 block">${p.grams || 'Unidad'} • Stock: <strong class="text-emerald-400">${p.stock || 0}</strong> • <strong class="text-amber-400">${p.supplier || 'Sin Proveedor'}</strong></span>
                         <div class="flex items-center gap-3 mt-1.5 font-mono">
                             <span class="text-xs text-cyan-400">Costo: <strong>${fmtMoneda(p.cost || 0)}</strong></span>
-                            <span class="text-xs text-emerald-400 font-bold">PVP: <strong>${fmtMoneda(p.pvp || 0)}</strong></span>
+                            <span class="text-xs text-slate-300">PVP: <strong>${fmtMoneda(p.pvp || 0)}</strong></span>
                         </div>
                     </div>
                     <button onclick="abrirModalEditar('${p.id}')" class="bg-slate-800 hover:bg-slate-700 text-cyan-400 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-slate-700 transition cursor-pointer flex-shrink-0 flex items-center gap-1.5">
-                        <i class="fa-solid fa-pen"></i> Editar
+                        <i class="fa-solid fa-pen"></i> Actualizar
                     </button>
                 </div>
             `).join('');
@@ -238,11 +210,8 @@
             if (!p) return;
 
             document.getElementById('editProdId').value = p.id;
-            document.getElementById('editProdNombre').value = p.name || '';
-            document.getElementById('editProdGrams').value = p.grams || '';
-            document.getElementById('editProdSupplier').value = p.supplier || '';
+            document.getElementById('editProdNombre').textContent = p.name || '';
             document.getElementById('editProdCosto').value = p.cost || 0;
-            document.getElementById('editProdPVP').value = p.pvp || 0;
             document.getElementById('editProdStock').value = p.stock || 0;
 
             document.getElementById('modalEditarProd').classList.remove('hidden');
@@ -252,43 +221,25 @@
             document.getElementById('modalEditarProd').classList.add('hidden');
         }
 
-        function recalcularPvpAutomaticoMovil() {
-            const costo = parseFloat(document.getElementById('editProdCosto').value) || 0;
-            // Cálculo automático estándar de tu ERP (aplica el margen aproximado para sugerir el PVP al instante)
-            if (costo > 0) {
-                const pvpSugerido = Math.round(costo * 1.15); // Factor base de margen
-                document.getElementById('editProdPVP').value = pvpSugerido;
-            }
-        }
-
-        async function guardarCambiosProductoMovil() {
+        async function guardarCostoestockMovil() {
             const id = document.getElementById('editProdId').value;
-            const nombre = document.getElementById('editProdNombre').value.trim();
-            const grams = document.getElementById('editProdGrams').value.trim();
-            const supplier = document.getElementById('editProdSupplier').value.trim();
-            const costo = parseFloat(document.getElementById('editProdCosto').value) || 0;
-            const pvp = parseFloat(document.getElementById('editProdPVP').value) || 0;
-            const stock = parseFloat(document.getElementById('editProdStock').value) || 0;
-
-            if (!nombre) { alert('El nombre es obligatorio'); return; }
+            const nuevoCosto = parseFloat(document.getElementById('editProdCosto').value) || 0;
+            const nuevoStock = parseFloat(document.getElementById('editProdStock').value) || 0;
 
             const prod = (datosGlobalesNube.catalog || []).find(x => String(x.id).trim() === String(id).trim());
-            if (prod) {
-                prod.name = nombre;
-                prod.grams = grams;
-                prod.supplier = supplier;
-                prod.cost = costo;
-                prod.pvp = pvp; // El PVP exacto que guardes acá es el que respetará la PC
-                prod.stock = stock;
-            } else {
+            if (!prod) {
                 alert('⚠️ No se encontró el producto.');
                 return;
             }
 
+            // SÓLO ACTUALIZA COSTO Y STOCK. LA PC SE ENCARGA DEL CÁLCULO DEL PVP.
+            prod.cost = nuevoCosto;
+            prod.stock = nuevoStock;
+
             try {
                 await db.collection('nexo_erp').doc('datos_globales').set(datosGlobalesNube, { merge: true });
                 cerrarModalEditar();
-                alert('✅ ¡Actualizado con éxito!');
+                alert('✅ ¡Costo y stock actualizados! El ERP de la PC recalculará el precio final automáticamente.');
             } catch (err) {
                 alert('❌ Error al actualizar: ' + err.message);
             }
@@ -297,7 +248,6 @@
         function abrirModalNuevoProducto() {
             document.getElementById('newProdNombre').value = '';
             document.getElementById('newProdCosto').value = '0';
-            document.getElementById('newProdPVP').value = '0';
             document.getElementById('newProdStock').value = '10';
             document.getElementById('modalNuevoProd').classList.remove('hidden');
         }
@@ -311,8 +261,6 @@
             const category = document.getElementById('newProdCat').value.trim() || 'Almacén';
             const supplier = document.getElementById('newProdSupplier').value.trim() || 'General';
             const cost = parseFloat(document.getElementById('newProdCosto').value) || 0;
-            const pvp = parseFloat(document.getElementById('newProdPVP').value) || 0;
-            const grams = document.getElementById('newProdGrams').value.trim() || 'Unidad';
             const stock = parseFloat(document.getElementById('newProdStock').value) || 0;
 
             if (!nombre) { alert('Escribí el nombre del producto'); return; }
@@ -331,10 +279,10 @@
                 iibb: 0,
                 iva: 0,
                 profitMode: 'margin',
-                pvp,
-                comision: pvp * 0.07,
+                pvp: cost * 1.5, // Base temporal hasta abrir la PC
+                comision: 0,
                 comisionPct: 7,
-                grams,
+                grams: 'Unidad',
                 stock,
                 img: '',
                 selectedForCatalog: true,
@@ -349,7 +297,7 @@
             try {
                 await db.collection('nexo_erp').doc('datos_globales').set(datosGlobalesNube, { merge: true });
                 cerrarModalNuevoProducto();
-                alert('✅ ¡Nuevo producto creado!');
+                alert('✅ ¡Nuevo producto creado con stock e impacto en la nube!');
             } catch (err) {
                 alert('❌ Error al guardar.');
             }
