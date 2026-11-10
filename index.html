@@ -284,7 +284,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_pdf_direct_v18';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_sync_v19';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -311,8 +311,10 @@
             const id = p.id || p.codigo || p.sku || String(Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
-            const promoText = String(p.promoText || '').trim();
-            const isFeatured = Boolean(p.isFeatured || promoText.length > 0);
+            
+            // SOLO ES PROMOCIÓN SI EL CHECKBOX "🔥 Promo" ESTÁ ACTIVO EN EL ERP
+            const isFeatured = (p.isFeatured === true);
+            const promoText = isFeatured ? String(p.promoText || '').trim() : '';
             
             const pvp = Number(p.pvp) || 0;
             const comisionPct = Number(p.sellerPct || p.comisionPct || 0);
@@ -329,7 +331,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -513,7 +515,6 @@
             document.getElementById('modalReporteEmergente').classList.add('hidden');
         }
 
-        // GENERA EL ARCHIVO PDF EN EL DISPOSITIVO Y ABRE EL COMPARTIR DE WHATSAPP DIRECTO
         async function compartirArchivoPDFWhatsApp() {
             const btn = document.getElementById('btnCompartirPDFWhatsApp');
             const textoOriginal = btn.innerHTML;
@@ -537,7 +538,6 @@
                 const pdfBlob = await html2pdf().set(opciones).from(elemento).outputPdf('blob');
                 const pdfFile = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
 
-                // Compartir nativo con archivo adjunto (WhatsApp en Android y iPhone)
                 if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
                     await navigator.share({
                         files: [pdfFile],
@@ -545,7 +545,6 @@
                         text: `Adjunto la Lista de Precios Oficial vigente al ${new Date().toLocaleDateString('es-AR')}.`
                     });
                 } else {
-                    // Si el navegador no permite compartir archivos directamente, lo descarga
                     html2pdf().set(opciones).from(elemento).save();
                     alert('PDF generado y descargado en tu dispositivo. Podés adjuntarlo directamente en WhatsApp.');
                 }
@@ -560,7 +559,6 @@
             }
         }
 
-        // DESCARGA MANUAL DEL ARCHIVO PDF
         function descargarPDFDirecto() {
             const elemento = document.getElementById('hojaImprimiblePDF');
             const hoy = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
