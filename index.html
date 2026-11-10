@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa v4 - Completo</title>
+    <title>Nexo Preventa v6 - Sincronizado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- LIBRERÍAS DE FIREBASE (Versión compatible con Vanilla JS) -->
+    <!-- LIBRERÍAS DE FIREBASE -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
@@ -26,7 +26,7 @@
                 <i class="fa-solid fa-lock"></i>
             </div>
             <div>
-                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v4</span></h2>
+                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v6</span></h2>
                 <p class="text-xs text-slate-400 mt-0.5">Sistema conectado a Firebase</p>
             </div>
             <div class="space-y-3.5 text-left">
@@ -261,7 +261,7 @@
         // ==========================================
         // LÓGICA DE LA APLICACIÓN
         // ==========================================
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v2';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v3';
 
         let DB = {
             vendedorActivo: '',
@@ -323,10 +323,21 @@
                     DB.catalogo = data.catalog || [];
                     DB.clientes = data.clients || [];
                     DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+                    
+                    // SINCRONIZACIÓN AUTOMÁTICA DE RENDIMIENTO DESDE EL ERP CENTRAL
+                    if (data.orders && Array.isArray(data.orders) && DB.vendedorActivo) {
+                        const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
+                        DB.pedidosSemana = data.orders.filter(o => {
+                            const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
+                            return vendPed === vendedorActual || !vendPed;
+                        });
+                    }
+
                     saveDB();
                     
                     if (DB.vendedorActivo) {
                         actualizarDropdownClientes();
+                        actualizarKpisSemanales();
                         renderCatalogo(document.getElementById('inputBuscarProd').value);
                     }
                     
@@ -415,7 +426,7 @@
 
             const agrupados = {};
             prods.forEach(p => {
-                const cat = p.categoria.toUpperCase();
+                const cat = (p.categoria || 'GENERAL').toUpperCase();
                 if(!agrupados[cat]) agrupados[cat] = [];
                 agrupados[cat].push(p);
             });
@@ -796,10 +807,10 @@
             const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
 
             pedidos.forEach(p => {
-                const vendPed = (p.vendedor || '').toLowerCase().trim();
+                const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
                 if (vendPed === vendedorActual || !vendPed) {
-                    totalVenta += (Number(p.total_venta) || 0);
-                    totalComision += (Number(p.comision_vendedor) || 0);
+                    totalVenta += (Number(p.total_venta || p.total) || 0);
+                    totalComision += (Number(p.comision_vendedor || p.sellerCommission) || 0);
                 }
             });
 
