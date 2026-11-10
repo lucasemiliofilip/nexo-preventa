@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa v6 - Sincronizado</title>
+    <title>Nexo Preventa v7 - Catálogo Integrado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -26,7 +26,7 @@
                 <i class="fa-solid fa-lock"></i>
             </div>
             <div>
-                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v6</span></h2>
+                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v7</span></h2>
                 <p class="text-xs text-slate-400 mt-0.5">Sistema conectado a Firebase</p>
             </div>
             <div class="space-y-3.5 text-left">
@@ -79,9 +79,9 @@
                             <span class="text-[10px] font-bold">PIN</span>
                         </div>
                         <div class="w-px h-3 bg-slate-700"></div>
-                        <div class="flex items-center gap-1 cursor-pointer text-emerald-400 hover:text-emerald-300 transition" onclick="generarListaPDF()" title="Descargar Lista PDF">
+                        <div class="flex items-center gap-1 cursor-pointer text-emerald-400 hover:text-emerald-300 transition" onclick="generarListaPDF()" title="Descargar Catálogo PDF">
                             <i class="fa-solid fa-file-pdf text-[11px]"></i>
-                            <span class="text-[10px] font-bold">PDF</span>
+                            <span class="text-[10px] font-bold">Catálogo PDF</span>
                         </div>
                     </div>
                 </div>
@@ -324,7 +324,6 @@
                     DB.clientes = data.clients || [];
                     DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
                     
-                    // SINCRONIZACIÓN AUTOMÁTICA DE RENDIMIENTO DESDE EL ERP CENTRAL
                     if (data.orders && Array.isArray(data.orders) && DB.vendedorActivo) {
                         const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                         DB.pedidosSemana = data.orders.filter(o => {
@@ -368,7 +367,7 @@
         }
 
         // ==========================================
-        // PDF Y CAMBIO DE PIN
+        // PDF Y CAMBIO DE PIN (IDÉNTICO AL ERP)
         // ==========================================
         function abrirCambioPinModal() {
             document.getElementById('pinActualInput').value = '';
@@ -418,7 +417,7 @@
 
         function generarListaPDF() {
             const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
-            if(prods.length === 0) { alert('No hay productos disponibles para armar la lista.'); return; }
+            if(prods.length === 0) { alert('No hay productos disponibles para armar el catálogo.'); return; }
 
             const btnPdf = event.currentTarget;
             const txtOrig = btnPdf.innerHTML;
@@ -434,21 +433,22 @@
             const hoy = new Date().toLocaleDateString('es-AR');
             let html = `
             <!DOCTYPE html>
-            <html><head><title>Lista de Precios</title>
+            <html><head><title>Lista de Precios Oficial</title>
             <style>
-                body { font-family: sans-serif; color: #000; padding: 10px; max-width: 800px; margin: 0 auto; }
+                @page { size: A4 portrait; margin: 12mm 15mm; }
+                body { font-family: sans-serif; color: #000; padding: 10px; max-width: 800px; margin: 0 auto; font-size: 11px; }
                 h1 { font-size: 18px; margin: 0; text-transform: uppercase; font-weight: 900; }
                 p.sub { font-size: 11px; color: #444; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px; }
-                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                th { border-bottom: 1px solid #000; text-align: left; padding: 4px; font-size: 10px; color: #444; text-transform: uppercase; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+                th { border-bottom: 1.5px solid #000; text-align: left; padding: 4px; font-size: 10px; color: #444; text-transform: uppercase; }
                 td { border-bottom: 1px solid #ddd; padding: 6px 4px; font-size: 11px; }
-                h2 { font-size: 12px; color: #555; text-transform: uppercase; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
-                .precio { font-weight: 900; text-align: right; white-space: nowrap; }
+                h2 { font-size: 12px; color: #fff; background: #000; padding: 4px 8px; text-transform: uppercase; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; border-radius: 3px; }
+                .precio { font-weight: 900; text-align: right; white-space: nowrap; font-family: monospace; font-size: 12px; }
                 .presentacion { font-size: 10px; color: #555; text-align: center; }
             </style>
             </head><body>
             <h1>MI DISTRIBUIDORA</h1>
-            <p class="sub">Presidencia Roque Sáenz Peña, Chaco • Lista vigente: ${hoy}</p>
+            <p class="sub">Presidencia Roque Sáenz Peña, Chaco • Lista de Precios Oficial Vigente: ${hoy}</p>
             `;
 
             for (const cat of Object.keys(agrupados).sort()) {
@@ -460,7 +460,7 @@
                 
                 agrupados[cat].forEach(p => {
                     html += `<tr>
-                        <td>${p.nombre}</td>
+                        <td><strong>${p.nombre}</strong></td>
                         <td class="presentacion">${p.presentacion}</td>
                         <td class="precio">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</td>
                     </tr>`;
