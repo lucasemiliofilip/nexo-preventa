@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa v11 - ERP Unificado</title>
+    <title>Nexo Preventa v12 - ERP Unificado Limpio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -30,7 +30,7 @@
                 <i class="fa-solid fa-lock"></i>
             </div>
             <div>
-                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v11</span></h2>
+                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v12</span></h2>
                 <p class="text-xs text-slate-400 mt-0.5">Sistema conectado a Firebase</p>
             </div>
             <div class="space-y-3.5 text-left">
@@ -292,7 +292,7 @@
         // ==========================================
         // LÓGICA DE LA APLICACIÓN
         // ==========================================
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v11'; // Clave actualizada para limpiar caché vieja
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v12'; // Clave completamente nueva para barrer caché vieja
 
         let DB = {
             vendedorActivo: '',
@@ -314,7 +314,7 @@
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || '-'; 
             
-            // LECTURA ESTRICTA DE LA FOTO DEL ERP (Compatible con state.catalog y exportaciones)
+            // LECTURA DIRECTA DE LA FOTO DESDE EL ERP CENTRAL (state.catalog / exportaciones)
             const img = p.img || p.imagen || p.image || '';
             
             const pvp = Number(p.pvp) || 0;
@@ -327,6 +327,14 @@
 
         function initApp() {
             try {
+                // Limpiamos cualquier caché vieja de versiones anteriores
+                localStorage.removeItem('nexo_preventa_db_v3');
+                localStorage.removeItem('nexo_preventa_db_v6');
+                localStorage.removeItem('nexo_preventa_db_v7');
+                localStorage.removeItem('nexo_preventa_db_v8');
+                localStorage.removeItem('nexo_preventa_db_v9');
+                localStorage.removeItem('nexo_preventa_db_v10');
+
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
                     const parsed = JSON.parse(raw);
@@ -354,7 +362,7 @@
             db.collection('nexo_erp').doc('datos_globales').onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
-                    // Lee directamente el catálogo actualizado del ERP con sus imágenes base64
+                    // CARGA ESTRICTA DEL CATÁLOGO UNIFICADO DEL ERP
                     DB.catalogo = data.catalog || [];
                     DB.clientes = data.clients || [];
                     DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
@@ -402,7 +410,7 @@
         }
 
         // ==========================================
-        // GENERACIÓN DEL CATÁLOGO UNIFICADO CON FOTOS DEL ERP
+        // GENERACIÓN DEL CATÁLOGO COMERCIAL UNIFICADO
         // ==========================================
         function abrirModalReporte(tipo) {
             const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
@@ -416,7 +424,7 @@
             let html = `
                 <div class="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-end">
                     <div>
-                        <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase">${tipo === 'lista' ? 'Lista de Precios Oficial' : 'Catálogo Comercial con Fotos del ERP'}</span>
+                        <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase">${tipo === 'lista' ? 'Lista de Precios Oficial' : 'Catálogo Comercial con Fotos'}</span>
                         <h2 class="text-base font-black uppercase text-slate-900 m-0 mt-1">${bizName}</h2>
                         <p class="text-[10px] text-slate-500 m-0">Vigente al: ${hoy}</p>
                     </div>
@@ -474,7 +482,7 @@
             document.getElementById('modalReporteEmergente').classList.add('hidden');
         }
 
-        // SOLUCIÓN DE IMPRESIÓN Y DESCARGA PDF COMPATIBLE CON MÓVILES
+        // IMPRESIÓN Y DESCARGA PDF BLINDADA PARA MÓVILES
         function imprimirReporteActual() {
             const contenido = document.getElementById('modalReporteContenido').innerHTML;
             
@@ -492,7 +500,7 @@
                 </head><body>${contenido}
                 <script>
                     window.onload = function() {
-                        setTimeout(() => { window.print(); }, 300);
+                        setTimeout(() => { window.print(); }, 400);
                     };
                 <\/script>
                 </body></html>
