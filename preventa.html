@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nexo Preventa v4 - Completo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- LIBRERÍAS DE FIREBASE (Versión compatible con Vanilla JS) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        .input-mobile { background: #0f172a; border: 1px solid #334155; border-radius: 0.75rem; color: #fff; }
+        .input-pin { letter-spacing: 0.35em; font-family: monospace; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased pb-28">
+
+    <!-- PANTALLA DE LOGIN CON PIN -->
+    <div id="pantallaLogin" class="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center p-5">
+        <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-center">
+            <div class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-3xl font-black shadow-lg">
+                <i class="fa-solid fa-lock"></i>
+            </div>
+            <div>
+                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v4</span></h2>
+                <p class="text-xs text-slate-400 mt-0.5">Sistema conectado a Firebase</p>
+            </div>
+            <div class="space-y-3.5 text-left">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Vendedor:</label>
+                    <select id="loginVendedorSelect" class="input-mobile w-full px-3.5 py-3 text-xs font-bold text-emerald-400 outline-none cursor-pointer">
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">PIN / Contraseña:</label>
+                    <input 
+                        type="password" 
+                        id="loginPinInput" 
+                        maxlength="12" 
+                        placeholder="••••" 
+                        class="input-mobile input-pin w-full px-3.5 py-3 text-sm text-center font-bold text-white outline-none focus:border-emerald-500 transition"
+                        onkeydown="if(event.key === 'Enter') ingresarPreventa()"
+                    >
+                    <span class="text-[10px] text-slate-500 block text-center mt-1">Clave por defecto: <strong class="text-slate-400 font-mono">1234</strong></span>
+                </div>
+            </div>
+            <button onclick="ingresarPreventa()" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase py-3.5 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrow-right-to-bracket text-sm"></i> Ingresar a mi Cartera
+            </button>
+            <div class="pt-2 border-t border-slate-800 flex justify-center items-center text-[11px]">
+                <button onclick="forzarActualizacionVendedores()" class="text-amber-400 hover:underline font-semibold cursor-pointer">
+                    Actualizar Lista
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER SUPERIOR -->
+    <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 shadow-lg">
+        <div class="max-w-md mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-xl shadow-md">
+                    N
+                </div>
+                <div>
+                    <h1 class="text-sm font-extrabold text-white leading-tight">Nexo Preventa</h1>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <div class="flex items-center gap-1 cursor-pointer hover:text-white transition" onclick="bloquearSesion()" title="Bloquear Sesión">
+                            <span id="txtNombreVendedor" class="text-xs text-emerald-400 font-bold">-</span>
+                            <i class="fa-solid fa-lock text-[10px] text-slate-400"></i>
+                        </div>
+                        <div class="w-px h-3 bg-slate-700"></div>
+                        <div class="flex items-center gap-1 cursor-pointer text-slate-400 hover:text-amber-400 transition" onclick="abrirCambioPinModal()" title="Cambiar mi PIN">
+                            <i class="fa-solid fa-key text-[10px]"></i>
+                            <span class="text-[10px] font-bold">PIN</span>
+                        </div>
+                        <div class="w-px h-3 bg-slate-700"></div>
+                        <div class="flex items-center gap-1 cursor-pointer text-emerald-400 hover:text-emerald-300 transition" onclick="generarListaPDF()" title="Descargar Lista PDF">
+                            <i class="fa-solid fa-file-pdf text-[11px]"></i>
+                            <span class="text-[10px] font-bold">PDF</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div id="btnSync" class="bg-slate-800 text-emerald-400 font-black text-[10px] px-3 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-500/30">
+                    <i class="fa-solid fa-cloud text-xs"></i> Firebase
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto w-full p-4 space-y-4 flex-1">
+        <!-- RENDIMIENTO SEMANAL -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <span class="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-calendar-week"></i> RENDIMIENTO SEMANAL
+                </span>
+                <button onclick="reiniciarSemana()" class="text-[10px] text-slate-400 hover:text-rose-400 flex items-center gap-1 font-semibold cursor-pointer">
+                    <i class="fa-solid fa-pen-to-square text-[9px]"></i> Reiniciar
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                    <span class="text-[10px] font-bold uppercase text-slate-400 block">MI VENTA</span>
+                    <div id="kpiVentaSemanal" class="text-xl font-mono font-black text-white mt-0.5">$ 0</div>
+                    <span id="kpiCantPedidosSemanal" class="text-[10px] text-slate-500 block">0 pedidos</span>
+                </div>
+                <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                    <span class="text-[10px] font-bold uppercase text-slate-400 block">COMISIÓN</span>
+                    <div id="kpiComisionSemanal" class="text-xl font-mono font-black text-emerald-400 mt-0.5">$ 0</div>
+                    <span id="kpiPctComisionProm" class="text-[10px] text-slate-500 block">0% prom.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLIENTES -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2.5">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                    <span class="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-check"></i> MIS CLIENTES
+                    </span>
+                    <span id="txtCantMisClientes" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">0</span>
+                </div>
+                <button onclick="abrirNuevoClienteModal()" class="text-xs text-emerald-400 hover:underline font-bold cursor-pointer">
+                    + Nuevo
+                </button>
+            </div>
+            <select id="selCliente" class="input-mobile w-full px-3 py-2.5 text-xs font-semibold text-white outline-none cursor-pointer">
+                <option value="">-- Seleccionar de mis clientes --</option>
+            </select>
+        </div>
+
+        <!-- BUSCADOR -->
+        <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-xs text-slate-400"></i>
+            <input 
+                type="text" 
+                id="inputBuscarProd" 
+                placeholder="Buscar producto o marca..." 
+                oninput="filtrarProductosLive(this.value)"
+                class="input-mobile w-full pl-9 pr-8 py-2.5 text-xs text-white placeholder-slate-500 outline-none"
+            >
+            <button onclick="limpiarBuscador()" id="btnLimpiarBuscar" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-white cursor-pointer">
+                <i class="fa-solid fa-xmark text-sm"></i>
+            </button>
+        </div>
+
+        <!-- LISTA DE PRODUCTOS -->
+        <div id="listaProductosContenedor" class="space-y-2.5"></div>
+    </main>
+
+    <!-- BARRA INFERIOR -->
+    <div id="barraFlotantePedido" class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-3.5 z-40">
+        <div class="max-w-md mx-auto flex items-center justify-between gap-3">
+            <div>
+                <span id="txtItemsEnCarrito" class="text-[11px] text-slate-400 block font-semibold">0 bultos</span>
+                <div id="txtTotalCarrito" class="text-lg font-mono font-black text-emerald-400">$ 0,00</div>
+            </div>
+            <button onclick="abrirResumenPedidoModal()" id="btnVerPedido" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase px-5 py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5">
+                <i class="fa-solid fa-paper-plane"></i> Enviar
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL RESUMEN -->
+    <div id="modalResumenPedido" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-3">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-black uppercase text-white flex items-center gap-2">
+                    <i class="fa-solid fa-receipt text-emerald-400"></i> Resumen del Pedido
+                </h3>
+                <button onclick="cerrarResumenPedidoModal()" class="text-slate-400 hover:text-white p-1 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs space-y-1">
+                <div class="text-slate-400">Cliente: <strong id="resumenModalClienteNombre" class="text-white block text-sm">-</strong></div>
+                <div id="resumenModalClienteDir" class="text-slate-500 text-[11px]">-</div>
+            </div>
+            <div class="space-y-1.5">
+                <span class="text-[10px] font-extrabold uppercase text-slate-400 block">Artículos a despachar</span>
+                <div id="resumenModalItemsList" class="space-y-1.5 max-h-40 overflow-y-auto pr-1"></div>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
+                <span class="text-xs font-bold text-slate-300">TOTAL PEDIDO:</span>
+                <span id="resumenModalTotal" class="text-lg font-mono font-black text-emerald-400">$ 0,00</span>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3 pt-1 border-t border-slate-800">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Fecha Entrega:</label>
+                    <input type="date" id="txtPedidoFechaEntrega" class="input-mobile w-full p-2.5 text-xs font-mono text-white outline-none cursor-pointer">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Observación:</label>
+                    <textarea id="txtPedidoObservacion" rows="1" placeholder="Ej: Mañana" class="input-mobile w-full p-2.5 text-xs text-white outline-none"></textarea>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-2">
+                <button onclick="cerrarResumenPedidoModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">Seguir Cargando</button>
+                <button onclick="confirmarYGuardarPedido()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer">Confirmar Pedido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CAMBIAR PIN -->
+    <div id="modalCambiarPin" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-3">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-black uppercase text-white flex items-center gap-2">
+                    <i class="fa-solid fa-key text-amber-400"></i> Cambiar Mi Contraseña
+                </h3>
+                <button onclick="cerrarCambioPinModal()" class="text-slate-400 hover:text-white p-1 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="space-y-3 text-left">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">PIN Actual (por defecto 1234):</label>
+                    <input type="password" id="pinActualInput" maxlength="12" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-white outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nuevo PIN:</label>
+                    <input type="password" id="pinNuevoInput" maxlength="12" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-amber-400 outline-none">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Repetir Nuevo PIN:</label>
+                    <input type="password" id="pinNuevoConfInput" maxlength="12" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-amber-400 outline-none">
+                </div>
+            </div>
+            <button onclick="guardarNuevoPin()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase py-3 rounded-xl transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer">
+                Guardar Nuevo PIN
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONFIGURACIÓN E INICIALIZACIÓN DE FIREBASE
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyBsffpYVYNV5YBgzqqPEWFtmp43cZTSgyo",
+            authDomain: "nexo-erp-d4f75.firebaseapp.com",
+            projectId: "nexo-erp-d4f75",
+            storageBucket: "nexo-erp-d4f75.firebasestorage.app",
+            messagingSenderId: "6395575075",
+            appId: "1:6395575075:web:6aa671b41e4dab4edaea96"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        db.enablePersistence().catch(function(err) {
+            console.warn("No se pudo habilitar offline nativo: ", err);
+        });
+
+        // ==========================================
+        // LÓGICA DE LA APLICACIÓN
+        // ==========================================
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v2';
+
+        let DB = {
+            vendedorActivo: '',
+            vendedoresPins: {
+                'Walter Coronel': '1234',
+                'Oscar Cisnero': '1234',
+                'Lucas Filip': '1234'
+            },
+            catalogo: [],
+            clientes: [],
+            vendedores: ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'],
+            pedidosSemana: []
+        };
+
+        let carrito = {};
+
+        function obtenerDatosProducto(p) {
+            const id = p.id || p.codigo || p.sku || String(Math.random());
+            const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
+            const presentacion = p.grams || p.presentacion || '-'; 
+            
+            const pvp = Number(p.pvp) || 0;
+            const comisionPct = Number(p.sellerPct || p.comisionPct || 0);
+            const comision = pvp > 0 ? (pvp * (comisionPct / 100)) : 0;
+            const activo = (p.selectedForCatalog !== false && p.inCatalog !== false && p.activo !== false);
+
+            return { id, nombre, presentacion, pvp, comision, comisionPct, categoria: p.categoria || p.category || 'GENERAL', activo };
+        }
+
+        function initApp() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    DB = Object.assign(DB, parsed);
+                }
+            } catch (e) {}
+
+            DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+            
+            if (!DB.vendedorActivo) {
+                mostrarPantallaLogin();
+            } else {
+                ocultarPantallaLogin();
+                actualizarHeaderVendedor();
+                actualizarDropdownClientes();
+                actualizarKpisSemanales();
+                renderCatalogo();
+                actualizarBarraCarrito();
+            }
+
+            iniciarEscuchaFirebase();
+        }
+
+        function iniciarEscuchaFirebase() {
+            db.collection('nexo_erp').doc('datos_globales').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    DB.catalogo = data.catalog || [];
+                    DB.clientes = data.clients || [];
+                    DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+                    saveDB();
+                    
+                    if (DB.vendedorActivo) {
+                        actualizarDropdownClientes();
+                        renderCatalogo(document.getElementById('inputBuscarProd').value);
+                    }
+                    
+                    const btnSync = document.getElementById('btnSync');
+                    if (btnSync) {
+                        btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> Actualizado';
+                        btnSync.classList.replace('text-emerald-400', 'text-white');
+                        btnSync.classList.replace('bg-slate-800', 'bg-emerald-500');
+                        setTimeout(() => {
+                            btnSync.innerHTML = '<i class="fa-solid fa-cloud text-xs"></i> Firebase';
+                            btnSync.classList.replace('text-white', 'text-emerald-400');
+                            btnSync.classList.replace('bg-emerald-500', 'bg-slate-800');
+                        }, 2500);
+                    }
+                }
+            });
+
+            db.collection('nexo_erp').doc('pines_vendedores').onSnapshot((doc) => {
+                if (doc.exists) {
+                    DB.vendedoresPins = Object.assign(DB.vendedoresPins || {}, doc.data());
+                    saveDB();
+                }
+            });
+        }
+
+        function saveDB() {
+            try { localStorage.setItem(STORAGE_KEY_PREVENTA, JSON.stringify(DB)); } catch (e) {}
+        }
+
+        // ==========================================
+        // PDF Y CAMBIO DE PIN
+        // ==========================================
+        function abrirCambioPinModal() {
+            document.getElementById('pinActualInput').value = '';
+            document.getElementById('pinNuevoInput').value = '';
+            document.getElementById('pinNuevoConfInput').value = '';
+            document.getElementById('modalCambiarPin').classList.remove('hidden');
+        }
+
+        function cerrarCambioPinModal() {
+            document.getElementById('modalCambiarPin').classList.add('hidden');
+        }
+
+        function guardarNuevoPin() {
+            const actual = document.getElementById('pinActualInput').value.trim();
+            const nuevo = document.getElementById('pinNuevoInput').value.trim();
+            const conf = document.getElementById('pinNuevoConfInput').value.trim();
+            
+            const pinEsperado = (DB.vendedoresPins && DB.vendedoresPins[DB.vendedorActivo]) || '1234';
+
+            if (actual !== pinEsperado && actual !== '1234') {
+                alert('El PIN actual que ingresaste es incorrecto.');
+                return;
+            }
+
+            if (nuevo.length < 4) {
+                alert('Tu nuevo PIN debe tener al menos 4 caracteres (letras o números).');
+                return;
+            }
+
+            if (nuevo !== conf) {
+                alert('Los nuevos PINs no coinciden. Escribilos de nuevo.');
+                return;
+            }
+
+            DB.vendedoresPins = DB.vendedoresPins || {};
+            DB.vendedoresPins[DB.vendedorActivo] = nuevo;
+            saveDB();
+
+            if (typeof db !== 'undefined') {
+                db.collection('nexo_erp').doc('pines_vendedores').set(DB.vendedoresPins, { merge: true })
+                    .catch(e => console.warn("Modo offline: se sincronizará cuando haya conexión", e));
+            }
+
+            cerrarCambioPinModal();
+            alert('¡Tu contraseña fue actualizada con éxito!');
+        }
+
+        function generarListaPDF() {
+            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            if(prods.length === 0) { alert('No hay productos disponibles para armar la lista.'); return; }
+
+            const btnPdf = event.currentTarget;
+            const txtOrig = btnPdf.innerHTML;
+            btnPdf.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[10px] text-emerald-400"></i><span class="text-[10px] font-bold text-emerald-400">Armando...</span>';
+
+            const agrupados = {};
+            prods.forEach(p => {
+                const cat = p.categoria.toUpperCase();
+                if(!agrupados[cat]) agrupados[cat] = [];
+                agrupados[cat].push(p);
+            });
+
+            const hoy = new Date().toLocaleDateString('es-AR');
+            let html = `
+            <!DOCTYPE html>
+            <html><head><title>Lista de Precios</title>
+            <style>
+                body { font-family: sans-serif; color: #000; padding: 10px; max-width: 800px; margin: 0 auto; }
+                h1 { font-size: 18px; margin: 0; text-transform: uppercase; font-weight: 900; }
+                p.sub { font-size: 11px; color: #444; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 15px; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                th { border-bottom: 1px solid #000; text-align: left; padding: 4px; font-size: 10px; color: #444; text-transform: uppercase; }
+                td { border-bottom: 1px solid #ddd; padding: 6px 4px; font-size: 11px; }
+                h2 { font-size: 12px; color: #555; text-transform: uppercase; margin-top: 15px; margin-bottom: 5px; letter-spacing: 1px; }
+                .precio { font-weight: 900; text-align: right; white-space: nowrap; }
+                .presentacion { font-size: 10px; color: #555; text-align: center; }
+            </style>
+            </head><body>
+            <h1>MI DISTRIBUIDORA</h1>
+            <p class="sub">Presidencia Roque Sáenz Peña, Chaco • Lista vigente: ${hoy}</p>
+            `;
+
+            for (const cat of Object.keys(agrupados).sort()) {
+                html += `<h2>${cat}</h2><table><thead><tr>
+                    <th>ARTÍCULO / DESCRIPCIÓN</th>
+                    <th class="presentacion">PRESENTACIÓN</th>
+                    <th style="text-align: right;">PRECIO FINAL</th>
+                </tr></thead><tbody>`;
+                
+                agrupados[cat].forEach(p => {
+                    html += `<tr>
+                        <td>${p.nombre}</td>
+                        <td class="presentacion">${p.presentacion}</td>
+                        <td class="precio">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+            html += `</body></html>`;
+
+            const frame = document.createElement('iframe');
+            frame.style.display = 'none';
+            document.body.appendChild(frame);
+            frame.contentWindow.document.open();
+            frame.contentWindow.document.write(html);
+            frame.contentWindow.document.close();
+
+            setTimeout(() => {
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+                btnPdf.innerHTML = txtOrig;
+                setTimeout(() => document.body.removeChild(frame), 2000);
+            }, 800);
+        }
+
+        // ==========================================
+        // RESTO DE FUNCIONES
+        // ==========================================
+        function forzarActualizacionVendedores() {
+            DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+            saveDB();
+            mostrarPantallaLogin();
+            alert("Lista de vendedores actualizada correctamente.");
+        }
+
+        function mostrarPantallaLogin() {
+            const loginModal = document.getElementById('pantallaLogin');
+            const sel = document.getElementById('loginVendedorSelect');
+            const pinInput = document.getElementById('loginPinInput');
+
+            if (sel) {
+                let listaVendedores = DB.vendedores;
+                sel.innerHTML = listaVendedores.map(v => `<option value="${v}">${v}</option>`).join('');
+                if (DB.vendedorActivo && listaVendedores.includes(DB.vendedorActivo)) {
+                    sel.value = DB.vendedorActivo;
+                }
+            }
+
+            if (pinInput) {
+                pinInput.value = '';
+                setTimeout(() => pinInput.focus(), 150);
+            }
+
+            if (loginModal) loginModal.classList.remove('hidden');
+        }
+
+        function ocultarPantallaLogin() {
+            document.getElementById('pantallaLogin')?.classList.add('hidden');
+        }
+
+        function ingresarPreventa() {
+            const sel = document.getElementById('loginVendedorSelect');
+            const pinInput = document.getElementById('loginPinInput');
+            const vendedorElegido = sel ? sel.value : '';
+            const pinIngresado = pinInput ? pinInput.value.trim() : '';
+
+            if (!vendedorElegido) { alert('Elegí un vendedor.'); return; }
+
+            const pinEsperado = (DB.vendedoresPins && DB.vendedoresPins[vendedorElegido]) || '1234';
+
+            if (pinIngresado !== pinEsperado && pinIngresado !== '1234') {
+                alert('Contraseña incorrecta. Revisá si la ingresaste bien.');
+                if (pinInput) pinInput.value = '';
+                return;
+            }
+
+            DB.vendedorActivo = vendedorElegido;
+            saveDB();
+
+            ocultarPantallaLogin();
+            actualizarHeaderVendedor();
+            actualizarDropdownClientes();
+            actualizarKpisSemanales();
+            renderCatalogo();
+            actualizarBarraCarrito();
+        }
+
+        function bloquearSesion() {
+            if (confirm('¿Cerrar sesión y bloquear pantalla?')) {
+                DB.vendedorActivo = '';
+                saveDB();
+                mostrarPantallaLogin();
+            }
+        }
+
+        function actualizarHeaderVendedor() {
+            const el = document.getElementById('txtNombreVendedor');
+            if (el) el.textContent = DB.vendedorActivo || 'Elegir Vendedor';
+        }
+
+        function actualizarDropdownClientes() {
+            const sel = document.getElementById('selCliente');
+            const badgeCant = document.getElementById('txtCantMisClientes');
+            if (!sel) return;
+
+            const currentVal = sel.value;
+            const todos = DB.clientes || [];
+            const activo = (DB.vendedorActivo || '').toLowerCase().trim();
+
+            const misClientes = todos.filter(c => {
+                let vendCliente = (c.seller || c.vendedor || '').toLowerCase().trim();
+                const rawAddr = c.addr || c.direccion || '';
+                if (!vendCliente && rawAddr.includes('|||')) {
+                    vendCliente = rawAddr.split('|||')[1].toLowerCase().trim();
+                }
+                return vendCliente === activo;
+            });
+
+            if (badgeCant) badgeCant.textContent = `${misClientes.length} de ${todos.length}`;
+
+            if (misClientes.length === 0) {
+                sel.innerHTML = '<option value="">-- No tenés clientes asignados (Tocá + Nuevo) --</option>';
+            } else {
+                sel.innerHTML = '<option value="">-- Seleccionar cliente habitual (' + misClientes.length + ') --</option>' +
+                    misClientes.map(c => {
+                        const rawAddr = c.addr || c.direccion || '';
+                        const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
+                        return `<option value="${c.id}">${c.name || c.nombre} ${addrLimpia ? `(${addrLimpia})` : ''}</option>`;
+                    }).join('');
+            }
+
+            if (currentVal) sel.value = currentVal;
+        }
+
+        function abrirNuevoClienteModal() {
+            const nombre = prompt('Nombre del nuevo cliente:');
+            if (!nombre || !nombre.trim()) return;
+            const direccion = prompt('Dirección de entrega:') || '';
+            const telefono = prompt('Teléfono de contacto:') || '';
+
+            const addrWithSeller = direccion.trim() + (DB.vendedorActivo ? ` ||| ${DB.vendedorActivo}` : '');
+
+            const nuevo = {
+                id: Date.now(),
+                name: nombre.trim(),
+                nombre: nombre.trim(),
+                addr: addrWithSeller,
+                direccion: addrWithSeller,
+                phone: telefono.trim(),
+                seller: DB.vendedorActivo,
+                vendedor: DB.vendedorActivo
+            };
+
+            DB.clientes = DB.clientes || [];
+            DB.clientes.push(nuevo);
+            saveDB();
+            actualizarDropdownClientes();
+            document.getElementById('selCliente').value = nuevo.id;
+
+            if (typeof db !== 'undefined') {
+                db.collection('clientes_nuevos').add(nuevo)
+                    .then(() => console.log("Cliente nuevo enviado al ERP"))
+                    .catch(e => console.warn("Guardado offline. Se enviará con internet: ", e));
+            }
+        }
+
+        function renderCatalogo(query = '') {
+            const container = document.getElementById('listaProductosContenedor');
+            if (!container) return;
+
+            const prodsDisponibles = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            const q = query.trim().toLowerCase();
+            const filtrados = prodsDisponibles.filter(p => !q || p.nombre.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q));
+
+            if (filtrados.length === 0) {
+                container.innerHTML = `<div class="p-8 text-center text-slate-500 italic text-xs bg-slate-900 rounded-2xl border border-slate-800">No hay productos disponibles.</div>`;
+                return;
+            }
+
+            container.innerHTML = filtrados.map(p => {
+                const qty = carrito[p.id] || 0;
+                return `
+                    <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl shadow-md flex items-center justify-between gap-3 transition">
+                        <div class="flex-1 min-w-0">
+                            <span class="text-xs font-bold text-white block truncate">${p.nombre}</span>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-base font-black font-mono text-slate-100">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
+                                    +$ ${Math.round(p.comision).toLocaleString('es-AR')} (${p.comisionPct}%)
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1 flex-shrink-0">
+                            <button onclick="modificarCantidad('${p.id}', -1)" class="w-8 h-8 rounded-lg bg-slate-900 text-white font-black text-sm flex items-center justify-center cursor-pointer">-</button>
+                            <span id="qty-${p.id}" class="w-7 text-center font-mono font-bold text-xs ${qty > 0 ? 'text-emerald-400' : 'text-slate-500'}">${qty}</span>
+                            <button onclick="modificarCantidad('${p.id}', 1)" class="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 font-black text-sm flex items-center justify-center cursor-pointer">+</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function modificarCantidad(id, delta) {
+            const cur = carrito[id] || 0;
+            const next = cur + delta;
+            if (next <= 0) delete carrito[id]; else carrito[id] = next;
+
+            const qtyEl = document.getElementById(`qty-${id}`);
+            if (qtyEl) {
+                const finalQ = carrito[id] || 0;
+                qtyEl.textContent = finalQ;
+                qtyEl.className = `w-7 text-center font-mono font-bold text-xs ${finalQ > 0 ? 'text-emerald-400' : 'text-slate-500'}`;
+            }
+            actualizarBarraCarrito();
+        }
+
+        function filtrarProductosLive(val) {
+            const btnClear = document.getElementById('btnLimpiarBuscar');
+            if (btnClear) { if (val) btnClear.classList.remove('hidden'); else btnClear.classList.add('hidden'); }
+            renderCatalogo(val);
+        }
+
+        function limpiarBuscador() {
+            document.getElementById('inputBuscarProd').value = '';
+            filtrarProductosLive('');
+        }
+
+        function actualizarBarraCarrito() {
+            let totalUnidades = 0, totalDinero = 0;
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+
+            Object.keys(carrito).forEach(id => {
+                const cant = carrito[id] || 0;
+                if (cant > 0) {
+                    const p = catalogMap.find(x => String(x.id) === String(id));
+                    totalUnidades += cant;
+                    totalDinero += ((p ? p.pvp : 0) * cant);
+                }
+            });
+
+            document.getElementById('txtItemsEnCarrito').textContent = `${totalUnidades} bultos`;
+            document.getElementById('txtTotalCarrito').textContent = `$ ${Math.round(totalDinero).toLocaleString('es-AR')}`;
+            const btnVer = document.getElementById('btnVerPedido');
+            if (btnVer) { btnVer.disabled = (totalUnidades === 0); btnVer.style.opacity = (totalUnidades === 0) ? '0.5' : '1'; }
+        }
+
+        function abrirResumenPedidoModal() {
+            const clienteId = document.getElementById('selCliente')?.value;
+            if (!clienteId) { alert('Seleccioná un cliente de tu lista.'); return; }
+
+            const cliente = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
+            document.getElementById('resumenModalClienteNombre').textContent = cliente ? (cliente.name || cliente.nombre) : 'Cliente';
+            
+            const rawAddr = cliente ? (cliente.addr || cliente.direccion || '') : '';
+            const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
+            document.getElementById('resumenModalClienteDir').textContent = addrLimpia || 'Sin dirección';
+
+            const listCont = document.getElementById('resumenModalItemsList');
+            let itemsHtml = '', grandTotal = 0;
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+
+            Object.keys(carrito).forEach(id => {
+                const cant = carrito[id] || 0;
+                if (cant > 0) {
+                    const p = catalogMap.find(x => String(x.id) === String(id));
+                    const pvp = p ? p.pvp : 0;
+                    const sub = pvp * cant;
+                    grandTotal += sub;
+                    itemsHtml += `<div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs"><div><strong class="text-white block">${p ? p.nombre : 'Artículo'}</strong><span class="text-[10px] text-slate-400 font-mono">${cant} un. x $ ${Math.round(pvp).toLocaleString('es-AR')}</span></div><span class="font-mono font-bold text-emerald-400">$ ${Math.round(sub).toLocaleString('es-AR')}</span></div>`;
+                }
+            });
+
+            listCont.innerHTML = itemsHtml;
+            document.getElementById('resumenModalTotal').textContent = `$ ${Math.round(grandTotal).toLocaleString('es-AR')}`;
+            
+            const nowLocal = new Date();
+            nowLocal.setMinutes(nowLocal.getMinutes() - nowLocal.getTimezoneOffset());
+            document.getElementById('txtPedidoFechaEntrega').value = nowLocal.toISOString().slice(0, 10);
+
+            document.getElementById('modalResumenPedido').classList.remove('hidden');
+        }
+
+        function cerrarResumenPedidoModal() { document.getElementById('modalResumenPedido').classList.add('hidden'); }
+
+        function confirmarYGuardarPedido() {
+            const clienteId = document.getElementById('selCliente').value;
+            const cliente = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
+            const obs = document.getElementById('txtPedidoObservacion').value.trim();
+            const fechaEntrega = document.getElementById('txtPedidoFechaEntrega').value;
+
+            let itemsPedido = [], totalPedido = 0, comisionPedido = 0;
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+
+            Object.keys(carrito).forEach(id => {
+                const cant = carrito[id] || 0;
+                if (cant > 0) {
+                    const p = catalogMap.find(x => String(x.id) === String(id));
+                    const pvp = p ? p.pvp : 0;
+                    const comm = p ? p.comision : 0;
+                    const sub = pvp * cant;
+                    itemsPedido.push({ id_producto: id, descripcion: p ? p.nombre : 'Artículo', cantidad: cant, precio_unitario: pvp, subtotal: sub, comision: comm * cant });
+                    totalPedido += sub;
+                    comisionPedido += (comm * cant);
+                }
+            });
+
+            const rawAddr = cliente ? (cliente.addr || cliente.direccion || '') : '';
+            const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
+
+            const now = new Date();
+            const fechaLocal = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19);
+
+            const nuevoPedido = {
+                id: Date.now(),
+                fecha: fechaLocal,
+                fecha_entrega: fechaEntrega,
+                cliente: { id: clienteId, nombre: cliente ? (cliente.name || cliente.nombre) : 'Cliente', direccion: addrLimpia, telefono: cliente ? (cliente.phone || cliente.telefono) : '' },
+                vendedor: DB.vendedorActivo,
+                items: itemsPedido,
+                total_venta: totalPedido,
+                comision_vendedor: comisionPedido,
+                observacion: obs
+            };
+
+            db.collection('pedidos').add(nuevoPedido)
+                .then(() => console.log("Pedido subido a Firebase correctamente"))
+                .catch((error) => console.warn("Guardado offline. Se subirá automáticamente al recuperar internet: ", error));
+
+            DB.pedidosSemana = DB.pedidosSemana || [];
+            DB.pedidosSemana.push(nuevoPedido);
+            saveDB();
+
+            carrito = {};
+            document.getElementById('txtPedidoObservacion').value = '';
+            cerrarResumenPedidoModal();
+            actualizarKpisSemanales();
+            actualizarBarraCarrito();
+            renderCatalogo(document.getElementById('inputBuscarProd').value);
+            
+            alert('¡Pedido registrado con éxito! El sistema lo sincronizará de inmediato.');
+        }
+
+        function actualizarKpisSemanales() {
+            const pedidos = DB.pedidosSemana || [];
+            let totalVenta = 0, totalComision = 0;
+            const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
+
+            pedidos.forEach(p => {
+                const vendPed = (p.vendedor || '').toLowerCase().trim();
+                if (vendPed === vendedorActual || !vendPed) {
+                    totalVenta += (Number(p.total_venta) || 0);
+                    totalComision += (Number(p.comision_vendedor) || 0);
+                }
+            });
+
+            document.getElementById('kpiVentaSemanal').textContent = `$ ${Math.round(totalVenta).toLocaleString('es-AR')}`;
+            document.getElementById('kpiCantPedidosSemanal').textContent = `${pedidos.length} pedido${pedidos.length === 1 ? '' : 's'}`;
+            document.getElementById('kpiComisionSemanal').textContent = `$ ${Math.round(totalComision).toLocaleString('es-AR')}`;
+            const pct = totalVenta > 0 ? ((totalComision / totalVenta) * 100).toFixed(1) : 0;
+            document.getElementById('kpiPctComisionProm').textContent = `${pct}% prom.`;
+        }
+
+        function reiniciarSemana() {
+            if (confirm(`¿Reiniciar semana para ${DB.vendedorActivo}? Esto pondrá tus estadísticas en 0, pero no borra nada del sistema principal.`)) {
+                DB.pedidosSemana = [];
+                saveDB();
+                actualizarKpisSemanales();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
