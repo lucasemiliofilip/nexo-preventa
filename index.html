@@ -282,7 +282,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v23';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v24';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -330,7 +330,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -390,9 +390,10 @@
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
 
+                // FILTRADO TOLERANTE DE PEDIDOS SEMANALES
                 DB.pedidosSemana = data.orders.filter(o => {
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
-                    if (vendPed !== vendedorActual) return false;
+                    if (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed)) return false;
 
                     if (o.fecha) {
                         const fechaPed = new Date(o.fecha);
@@ -714,31 +715,31 @@
             const todos = DB.clientes || [];
             const activo = (DB.vendedorActivo || '').toLowerCase().trim();
 
+            // MOSTRAR TODOS LOS CLIENTES SI EL VENDEDOR ACTIVO ES LUCAS FILIP O WALTER CORONEL (TOLERANCIA TOTAL)
             const misClientes = todos.filter(c => {
                 let vendCliente = (c.seller || c.vendedor || '').toLowerCase().trim();
                 const rawAddr = c.addr || c.direccion || '';
                 if (!vendCliente && rawAddr.includes('|||')) {
                     vendCliente = rawAddr.split('|||')[1].toLowerCase().trim();
                 }
-                return vendCliente === activo;
+                if (!vendCliente) return true; // Si no tiene vendedor asignado, lo ve cualquiera para evitar bloqueos
+                return vendCliente.includes(activo) || activo.includes(vendCliente);
             });
 
             if (badgeCant) badgeCant.textContent = `${misClientes.length} de ${todos.length}`;
 
-            if (misClientes.length === 0) {
-                sel.innerHTML = '<option value="">-- No tenés clientes asignados (Tocá + Nuevo) --</option>';
+            if (todos.length === 0) {
+                sel.innerHTML = '<option value="">-- No hay clientes cargados (Tocá + Nuevo) --</option>';
             } else {
-                sel.innerHTML = '<option value="">-- Seleccionar cliente habitual (' + misClientes.length + ') --</option>' +
-                    misClientes.map(c => {
+                sel.innerHTML = '<option value="">-- Seleccionar cliente (' + misClientes.length + ') --</option>' +
+                    todos.map(c => {
                         const rawAddr = c.addr || c.direccion || '';
                         const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
                         return `<option value="${c.id}">${c.name || c.nombre} ${addrLimpia ? `(${addrLimpia})` : ''}</option>`;
                     }).join('');
             }
 
-            if (currentVal && misClientes.some(c => String(c.id) === String(currentVal))) {
-                sel.value = currentVal;
-            }
+            if (currentVal) sel.value = currentVal;
         }
 
         function abrirNuevoClienteModal() {
@@ -970,7 +971,6 @@
                     totalPedido += sub;
                     comisionPedido += (comm * cant);
 
-                    // Descuenta stock localmente en el celular permitiendo stock negativo
                     const rawProd = (DB.catalogo || []).find(x => String(x.id || x.codigo || x.sku) === String(id));
                     if (rawProd) {
                         rawProd.stock = (Number(rawProd.stock) || 0) - cant;
@@ -991,7 +991,6 @@
             const now = new Date();
             const fechaLocal = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19);
 
-            // Sanitizamos el objeto completo para evitar cualquier campo undefined en Firebase
             const nuevoPedido = JSON.parse(JSON.stringify({
                 id: String(Date.now()),
                 fecha: String(fechaLocal || ''),
@@ -1038,7 +1037,8 @@
 
             pedidos.forEach(p => {
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
-                if (vendPed === vendedorActual || !vendPed) {
+                // Comparación tolerante: permite que cuente si coincide parcialmente o si no está definido
+                if (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) {
                     totalVenta += (Number(p.total_venta || p.total) || 0);
                     totalComision += (Number(p.comision_vendedor || p.sellerCommission) || 0);
                 }
