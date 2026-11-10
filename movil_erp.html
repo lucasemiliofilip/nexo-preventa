@@ -226,20 +226,34 @@
             const nuevoCosto = parseFloat(document.getElementById('editProdCosto').value) || 0;
             const nuevoStock = parseFloat(document.getElementById('editProdStock').value) || 0;
 
-            const prod = (datosGlobalesNube.catalog || []).find(x => String(x.id).trim() === String(id).trim());
-            if (!prod) {
-                alert('⚠️ No se encontró el producto.');
-                return;
-            }
-
-            // SÓLO ACTUALIZA COSTO Y STOCK. LA PC SE ENCARGA DEL CÁLCULO DEL PVP.
-            prod.cost = nuevoCosto;
-            prod.stock = nuevoStock;
-
             try {
-                await db.collection('nexo_erp').doc('datos_globales').set(datosGlobalesNube, { merge: true });
+                // Descargamos la versión más fresca de la nube para evitar colisiones
+                const docRef = db.collection('nexo_erp').doc('datos_globales');
+                const docSnap = await docRef.get();
+                
+                if (!docSnap.exists) {
+                    alert('❌ Error: No se encontró el documento en Firebase.');
+                    return;
+                }
+
+                let nubeData = docSnap.data();
+                let catalog = nubeData.catalog || [];
+
+                const index = catalog.findIndex(x => String(x.id).trim() === String(id).trim());
+                if (index === -1) {
+                    alert('⚠️ No se encontró el producto en el catálogo.');
+                    return;
+                }
+
+                // Actualizamos únicamente costo y stock de este ítem
+                catalog[index].cost = nuevoCosto;
+                catalog[index].stock = nuevoStock;
+
+                // Guardamos solo el array de catálogo actualizado de manera limpia
+                await docRef.set({ catalog: catalog }, { merge: true });
+
                 cerrarModalEditar();
-                alert('✅ ¡Costo y stock actualizados! El ERP de la PC recalculará el precio final automáticamente.');
+                alert('✅ ¡Costo y stock actualizados en la nube con éxito!');
             } catch (err) {
                 alert('❌ Error al actualizar: ' + err.message);
             }
@@ -265,41 +279,45 @@
 
             if (!nombre) { alert('Escribí el nombre del producto'); return; }
 
-            const nuevoProd = {
-                id: Date.now(),
-                name: nombre,
-                category,
-                supplier,
-                cost,
-                freight: 0,
-                fixedPct: 6,
-                sellerPct: 7,
-                profitPct: 15,
-                payFee: 0,
-                iibb: 0,
-                iva: 0,
-                profitMode: 'margin',
-                pvp: cost * 1.5, // Base temporal hasta abrir la PC
-                comision: 0,
-                comisionPct: 7,
-                grams: 'Unidad',
-                stock,
-                img: '',
-                selectedForCatalog: true,
-                inCatalog: true,
-                isFeatured: false,
-                promoText: ''
-            };
-
-            datosGlobalesNube.catalog = datosGlobalesNube.catalog || [];
-            datosGlobalesNube.catalog.unshift(nuevoProd);
-
             try {
-                await db.collection('nexo_erp').doc('datos_globales').set(datosGlobalesNube, { merge: true });
+                const docRef = db.collection('nexo_erp').doc('datos_globales');
+                const docSnap = await docRef.get();
+                let nubeData = docSnap.exists ? docSnap.data() : { catalog: [] };
+                let catalog = nubeData.catalog || [];
+
+                const nuevoProd = {
+                    id: Date.now(),
+                    name: nombre,
+                    category,
+                    supplier,
+                    cost,
+                    freight: 0,
+                    fixedPct: 6,
+                    sellerPct: 7,
+                    profitPct: 15,
+                    payFee: 0,
+                    iibb: 0,
+                    iva: 0,
+                    profitMode: 'margin',
+                    pvp: cost * 1.5,
+                    comision: 0,
+                    comisionPct: 7,
+                    grams: 'Unidad',
+                    stock,
+                    img: '',
+                    selectedForCatalog: true,
+                    inCatalog: true,
+                    isFeatured: false,
+                    promoText: ''
+                };
+
+                catalog.unshift(nuevoProd);
+                await docRef.set({ catalog: catalog }, { merge: true });
+
                 cerrarModalNuevoProducto();
-                alert('✅ ¡Nuevo producto creado con stock e impacto en la nube!');
+                alert('✅ ¡Nuevo producto creado y guardado en la nube!');
             } catch (err) {
-                alert('❌ Error al guardar.');
+                alert('❌ Error al guardar el producto.');
             }
         }
 
