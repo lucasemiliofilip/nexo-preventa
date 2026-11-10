@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa - Sincronizado</title>
+    <title>Nexo Preventa - Stock Sincronizado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -428,9 +428,6 @@
             renderCatalogo(document.getElementById('inputBuscarProd').value);
         }
 
-        // ===================================================================
-        // VISTA PREVIA Y COMPARTIR ARCHIVO PDF DIRECTO POR WHATSAPP
-        // ===================================================================
         function abrirModalListaPrecios() {
             const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
             if (prods.length === 0) {
@@ -574,9 +571,6 @@
             html2pdf().set(opciones).from(elemento).save();
         }
 
-        // ===================================================================
-        // PIN, CLIENTES Y REGISTRO DE PEDIDOS (ADVERTENCIA DE STOCK SIN BLOQUEO)
-        // ===================================================================
         function abrirCambioPinModal() {
             document.getElementById('pinActualInput').value = '';
             document.getElementById('pinNuevoInput').value = '';
@@ -821,10 +815,8 @@
             if (next <= 0) {
                 delete carrito[id];
             } else {
-                // ADVERTENCIA SUAVE SI SUPERA EL STOCK (PERO PERMITE CARGAR IGUAL)
                 const prod = (DB.catalogo || []).map(obtenerDatosProducto).find(x => String(x.id) === String(id));
                 if (prod && next > prod.stock) {
-                    // Solo mostramos un aviso sutil la primera vez que cruza el límite o al sumar
                     if (delta > 0 && cur === prod.stock) {
                         alert(`⚠️ Aviso: Estás pidiendo ${next} unidades de "${prod.nombre}", pero en stock figuran ${prod.stock}. El pedido se cargará igual.`);
                     }
