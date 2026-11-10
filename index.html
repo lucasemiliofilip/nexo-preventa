@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa - Stock Sincronizado</title>
+    <title>Nexo Preventa - Sincronizado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -94,15 +94,13 @@
         </header>
 
         <main class="max-w-md mx-auto w-full p-4 space-y-4 flex-1">
-            <!-- RENDIMIENTO SEMANAL -->
+            <!-- RENDIMIENTO SEMANAL (AUTOMÁTICO HASTA SÁBADO MADRUGADA) -->
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
                 <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
                     <span class="text-[11px] font-black uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
-                        <i class="fa-solid fa-calendar-week"></i> RENDIMIENTO SEMANAL
+                        <i class="fa-solid fa-calendar-week"></i> RENDIMIENTO SEMANAL (AUTOMÁTICO)
                     </span>
-                    <button onclick="reiniciarSemana()" class="text-[10px] text-slate-400 hover:text-rose-400 flex items-center gap-1 font-semibold cursor-pointer">
-                        <i class="fa-solid fa-pen-to-square text-[9px]"></i> Reiniciar
-                    </button>
+                    <span class="text-[10px] text-slate-400 font-mono">Corte: Sábados 04:00 AM</span>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
@@ -284,10 +282,10 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v21';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v22';
 
         let DB = {
-            bizConfig: { name: 'MI DISTRIBUIDORA / COMMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
+            bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
             vendedorActivo: '',
             vendedoresPins: {
                 'Walter Coronel': '1234',
@@ -331,7 +329,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -356,6 +354,25 @@
             iniciarEscuchaFirebase();
         }
 
+        // FUNCIÓN CLAVE: OBTIENE EL SÁBADO DE LA SEMANA ACTUAL A LAS 04:00 AM COMO LÍMITE DE CORTE
+        function obtenerInicioSemanaComercialActual() {
+            const ahora = new Date();
+            const diaSemana = ahora.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+            const hora = ahora.getHours();
+
+            // Si es Sábado y ya pasaron las 04:00 AM, el ciclo actual arranca este mismo Sábado a las 04:00 AM.
+            // Si es antes de las 04:00 AM del Sábado (o cualquier otro día anterior), arranca el Sábado de la semana pasada.
+            const inicio = new Date(ahora);
+            let diasAjuste = (diaSemana === 6 && hora >= 4) ? 0 : (diaSemana + 1);
+            if (diaSemana !== 6) {
+                diasAjuste = diaSemana + 1; // Ajuste para retroceder al sábado previo
+            }
+            
+            inicio.setDate(inicio.getDate() - diasAjuste);
+            inicio.setHours(4, 0, 0, 0); // Sábado a las 04:00 AM
+            return inicio;
+        }
+
         function aplicarDatosDesdeFirebase(data) {
             if (!data) return;
             if (data.bizConfig) DB.bizConfig = data.bizConfig;
@@ -365,9 +382,18 @@
             
             if (Array.isArray(data.orders) && DB.vendedorActivo) {
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
+                const inicioCiclo = obtenerInicioSemanaComercialActual();
+
+                // FILTRADO AUTOMÁTICO: Solo acumula los pedidos cargados a partir del sábado a las 04:00 AM
                 DB.pedidosSemana = data.orders.filter(o => {
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
-                    return vendPed === vendedorActual;
+                    if (vendPed !== vendedorActual) return false;
+
+                    if (o.fecha) {
+                        const fechaPed = new Date(o.fecha);
+                        return fechaPed >= inicioCiclo;
+                    }
+                    return true;
                 });
             }
 
