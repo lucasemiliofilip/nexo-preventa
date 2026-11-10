@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa v8 - Catálogo y Lista Integrados</title>
+    <title>Nexo Preventa v9 - Catálogo Sincronizado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -30,7 +30,7 @@
                 <i class="fa-solid fa-lock"></i>
             </div>
             <div>
-                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v8</span></h2>
+                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v9</span></h2>
                 <p class="text-xs text-slate-400 mt-0.5">Sistema conectado a Firebase</p>
             </div>
             <div class="space-y-3.5 text-left">
@@ -180,8 +180,8 @@
         </div>
     </div>
 
-    <!-- MODAL VENTANA EMERGENTE PARA LISTA / CATÁLOGO (SOLUCIÓN MÓVIL) -->
-    <div id="modalReporteEmergente" class="hidden fixed inset-0 bg-slate-950/9kt backdrop-blur-sm z-50 flex items-center justify-center p-3">
+    <!-- MODAL VENTANA EMERGENTE PARA LISTA / CATÁLOGO -->
+    <div id="modalReporteEmergente" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-3">
         <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl flex flex-col shadow-2xl max-h-[92vh]">
             <div class="flex justify-between items-center border-b border-slate-800 p-4 bg-slate-950 rounded-t-2xl">
                 <h3 id="modalReporteTitulo" class="text-sm font-black uppercase text-white flex items-center gap-2">
@@ -195,7 +195,7 @@
                 </div>
             </div>
             <div id="modalReporteContenido" class="p-5 overflow-y-auto flex-1 bg-white text-slate-900 rounded-b-2xl">
-                <!-- Se inyecta dinámicamente la lista o el catálogo -->
+                <!-- Se inyecta dinámicamente -->
             </div>
         </div>
     </div>
@@ -399,7 +399,7 @@
         }
 
         // ==========================================
-        // APERTURA DE MODALES EMERGENTES PARA CELULAR (LISTA VS CATÁLOGO)
+        // APERTURA DE MODAL Y RECONOCIMIENTO DE FOTOS DEL ERP
         // ==========================================
         function abrirModalReporte(tipo) {
             const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
@@ -413,7 +413,7 @@
             let html = `
                 <div class="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-end">
                     <div>
-                        <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase">${tipo === 'lista' ? 'Lista de Precios Oficial' : 'Catálogo Comercial Visual'}</span>
+                        <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase">${tipo === 'lista' ? 'Lista de Precios Oficial' : 'Catálogo Comercial con Fotos'}</span>
                         <h2 class="text-base font-black uppercase text-slate-900 m-0 mt-1">${bizName}</h2>
                         <p class="text-[10px] text-slate-500 m-0">Vigente al: ${hoy}</p>
                     </div>
@@ -438,23 +438,23 @@
                     html += `</tbody></table>`;
                 }
             } else {
-                tituloEl.innerHTML = '<i class="fa-solid fa-images text-emerald-400"></i> Catálogo con Fotos';
+                tituloEl.innerHTML = '<i class="fa-solid fa-images text-emerald-400"></i> Catálogo Visual';
                 for (const cat of Object.keys(agrupados).sort()) {
                     html += `<h3 class="text-xs font-black uppercase bg-slate-900 text-white px-2.5 py-1 rounded mt-4 mb-2">${cat}</h3>`;
-                    html += `<div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-4">`;
+                    html += `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;">`;
                     agrupados[cat].forEach(p => {
                         const hasImg = p.img && p.img.length > 10;
                         html += `
-                            <div class="bg-white p-2 rounded-xl border border-slate-200 flex flex-col justify-between shadow-xs">
+                            <div style="background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; width: 31%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between;">
                                 <div>
-                                    <div class="h-24 mb-1.5 flex items-center justify-center bg-slate-50 rounded border border-slate-100 overflow-hidden p-1">
-                                        ${hasImg ? `<img src="${p.img}" class="max-h-full object-contain">` : `<span class="text-[9px] text-slate-400 uppercase font-semibold">Sin Foto</span>`}
+                                    <div style="height: 90px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 6px; margin-bottom: 6px; overflow: hidden;">
+                                        ${hasImg ? `<img src="${p.img}" style="max-height: 85px; max-width: 100%; object-fit: contain;">` : `<span style="font-size: 9px; color: #94a3b8; font-weight: bold; text-transform: uppercase;">Sin Foto</span>`}
                                     </div>
-                                    <strong class="text-[11px] text-slate-900 block leading-tight line-clamp-2">${p.nombre}</strong>
-                                    <span class="text-[9px] text-slate-500 block">${p.presentacion}</span>
+                                    <strong style="font-size: 11px; color: #0f172a; display: block; line-height: 1.2; margin-bottom: 2px;">${p.nombre}</strong>
+                                    <span style="font-size: 9px; color: #64748b; display: block;">${p.presentacion}</span>
                                 </div>
-                                <div class="mt-2 pt-1.5 border-t border-slate-100 text-right">
-                                    <span class="text-xs font-mono font-black text-emerald-700">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</span>
+                                <div style="margin-top: 6px; padding-top: 4px; border-top: 1px solid #f1f5f9; text-align: right;">
+                                    <span style="font-size: 12px; font-family: monospace; font-weight: 900; color: #047857;">$ ${Math.round(p.pvp).toLocaleString('es-AR')}</span>
                                 </div>
                             </div>
                         `;
@@ -479,16 +479,13 @@
             frame.contentWindow.document.open();
             frame.contentWindow.document.write(`
                 <!DOCTYPE html>
-                <html><head><title>Imprimir Catálogo / Lista</title>
+                <html><head><title>Catálogo / Lista</title>
                 <style>
-                    body { font-family: sans-serif; color: #000; padding: 15px; }
+                    body { font-family: sans-serif; color: #000; padding: 15px; background: #fff; }
                     table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
                     th { border-bottom: 1.5px solid #000; text-align: left; padding: 4px; font-size: 10px; text-transform: uppercase; }
                     td { border-bottom: 1px solid #ddd; padding: 6px 4px; font-size: 11px; }
                     h3 { font-size: 12px; color: #fff; background: #000; padding: 4px 8px; text-transform: uppercase; margin-top: 15px; margin-bottom: 5px; border-radius: 3px; }
-                    .grid { display: flex; flex-wrap: wrap; gap: 8px; }
-                    .bg-white { background: #fff; border: 1px solid #ccc; padding: 8px; border-radius: 8px; width: 30%; box-sizing: border-box; }
-                    img { max-height: 80px; display: block; margin: 0 auto 5px auto; object-fit: contain; }
                 </style>
                 </head><body>${contenido}</body></html>
             `);
