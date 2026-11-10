@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nexo Preventa v10 - ERP Sincronizado</title>
+    <title>Nexo Preventa v11 - ERP Unificado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -30,7 +30,7 @@
                 <i class="fa-solid fa-lock"></i>
             </div>
             <div>
-                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v10</span></h2>
+                <h2 class="text-lg font-black text-white tracking-wide uppercase">Nexo Preventa <span class="text-xs text-emerald-400">v11</span></h2>
                 <p class="text-xs text-slate-400 mt-0.5">Sistema conectado a Firebase</p>
             </div>
             <div class="space-y-3.5 text-left">
@@ -292,7 +292,7 @@
         // ==========================================
         // LÓGICA DE LA APLICACIÓN
         // ==========================================
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v3';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_db_v11'; // Clave actualizada para limpiar caché vieja
 
         let DB = {
             vendedorActivo: '',
@@ -314,7 +314,7 @@
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || '-'; 
             
-            // LECTURA DIRECTA DE LA FOTO DESDE EL ERP CENTRAL (Sincronizado)
+            // LECTURA ESTRICTA DE LA FOTO DEL ERP (Compatible con state.catalog y exportaciones)
             const img = p.img || p.imagen || p.image || '';
             
             const pvp = Number(p.pvp) || 0;
@@ -354,6 +354,7 @@
             db.collection('nexo_erp').doc('datos_globales').onSnapshot((doc) => {
                 if (doc.exists) {
                     const data = doc.data();
+                    // Lee directamente el catálogo actualizado del ERP con sus imágenes base64
                     DB.catalogo = data.catalog || [];
                     DB.clientes = data.clients || [];
                     DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
@@ -401,7 +402,7 @@
         }
 
         // ==========================================
-        // GENERACIÓN Y VISUALIZACIÓN DEL CATÁLOGO & LISTA DESDE EL ERP
+        // GENERACIÓN DEL CATÁLOGO UNIFICADO CON FOTOS DEL ERP
         // ==========================================
         function abrirModalReporte(tipo) {
             const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
@@ -415,7 +416,7 @@
             let html = `
                 <div class="border-b-2 border-slate-900 pb-3 mb-4 flex justify-between items-end">
                     <div>
-                        <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase">${tipo === 'lista' ? 'Lista de Precios Oficial' : 'Catálogo Comercial con Fotos'}</span>
+                        <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[9px] uppercase">${tipo === 'lista' ? 'Lista de Precios Oficial' : 'Catálogo Comercial con Fotos del ERP'}</span>
                         <h2 class="text-base font-black uppercase text-slate-900 m-0 mt-1">${bizName}</h2>
                         <p class="text-[10px] text-slate-500 m-0">Vigente al: ${hoy}</p>
                     </div>
@@ -440,7 +441,7 @@
                     html += `</tbody></table>`;
                 }
             } else {
-                tituloEl.innerHTML = '<i class="fa-solid fa-images text-emerald-400"></i> Catálogo Visual';
+                tituloEl.innerHTML = '<i class="fa-solid fa-images text-emerald-400"></i> Catálogo Visual del ERP';
                 for (const cat of Object.keys(agrupados).sort()) {
                     html += `<h3 class="text-xs font-black uppercase bg-slate-900 text-white px-2.5 py-1 rounded mt-4 mb-2">${cat}</h3>`;
                     html += `<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px;">`;
@@ -473,11 +474,10 @@
             document.getElementById('modalReporteEmergente').classList.add('hidden');
         }
 
-        // SOLUCIÓN DEFINITIVA DE IMPRESIÓN MÓVIL
+        // SOLUCIÓN DE IMPRESIÓN Y DESCARGA PDF COMPATIBLE CON MÓVILES
         function imprimirReporteActual() {
             const contenido = document.getElementById('modalReporteContenido').innerHTML;
             
-            // Creamos un blob HTML autocontenido para abrirlo en una nueva pestaña limpia (evita bloqueos de celular)
             const htmlCompleto = `
                 <!DOCTYPE html>
                 <html><head><title>Impresión de Reporte</title>
@@ -492,7 +492,7 @@
                 </head><body>${contenido}
                 <script>
                     window.onload = function() {
-                        window.print();
+                        setTimeout(() => { window.print(); }, 300);
                     };
                 <\/script>
                 </body></html>
