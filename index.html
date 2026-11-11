@@ -282,7 +282,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v29';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v31';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -352,7 +352,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24', 'nexo_preventa_stock_v25', 'nexo_preventa_stock_v26', 'nexo_preventa_stock_v27', 'nexo_preventa_stock_v28'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24', 'nexo_preventa_stock_v25', 'nexo_preventa_stock_v26', 'nexo_preventa_stock_v27', 'nexo_preventa_stock_v28', 'nexo_preventa_stock_v29', 'nexo_preventa_stock_v30'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -411,9 +411,13 @@
             if (Array.isArray(data.orders) && DB.vendedorActivo) {
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
+                const descartados = Array.isArray(data.dismissedOrderIds) ? data.dismissedOrderIds.map(String) : [];
 
-                // Filtramos los pedidos que vienen del ERP convirtiendo bien la fecha DD/MM/AAAA
+                // 1. El ERP manda: tomamos exclusivamente los pedidos activos en el ERP (y excluimos los eliminados)
                 const pedidosDesdeNube = data.orders.filter(o => {
+                    const idStr = String(o.id);
+                    if (descartados.includes(idStr)) return false;
+
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
                     if (!vendPed || (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed))) return false;
 
@@ -421,23 +425,19 @@
                     return fechaObj >= inicioCiclo;
                 });
 
-                // Conservamos también los pedidos recién emitidos en el celular que aún estén en proceso de sincronización
-                const mapaPedidos = new Map();
-                (DB.pedidosSemana || []).forEach(pLocal => {
-                    const vendPed = (pLocal.seller || pLocal.vendedor || '').toLowerCase().trim();
-                    if (vendPed && (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed))) {
-                        const fechaObj = parseFechaPedido(pLocal.fecha || pLocal.date);
-                        if (fechaObj >= inicioCiclo) {
-                            mapaPedidos.set(String(pLocal.id), pLocal);
-                        }
-                    }
+                const idsEnNube = new Set(pedidosDesdeNube.map(o => String(o.id)));
+                const ahoraMs = Date.now();
+
+                // 2. Solo conservamos durante 4 segundos el pedido recién enviado mientras llega a la PC
+                const localesEnTransito = (DB.pedidosSemana || []).filter(pLocal => {
+                    const idStr = String(pLocal.id);
+                    if (idsEnNube.has(idStr)) return false;
+                    if (descartados.includes(idStr)) return false;
+                    const creadoHaceMs = ahoraMs - (Number(pLocal._localCreatedAt) || 0);
+                    return creadoHaceMs >= 0 && creadoHaceMs < 4000;
                 });
 
-                pedidosDesdeNube.forEach(pNube => {
-                    mapaPedidos.set(String(pNube.id), pNube);
-                });
-
-                DB.pedidosSemana = Array.from(mapaPedidos.values());
+                DB.pedidosSemana = [...pedidosDesdeNube, ...localesEnTransito];
             }
 
             saveDB();
@@ -1060,7 +1060,7 @@
             }
 
             DB.pedidosSemana = DB.pedidosSemana || [];
-            DB.pedidosSemana.push(nuevoPedido);
+            DB.pedidosSemana.push(Object.assign({}, nuevoPedido, { _localCreatedAt: Date.now() }));
             saveDB();
 
             carrito = {};
