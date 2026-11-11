@@ -282,7 +282,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v28';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v29';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -304,6 +304,28 @@
 
         function fmtMoneda(num) {
             return '$ ' + Math.round(Number(num) || 0).toLocaleString('es-AR');
+        }
+
+        // LECTOR SEGURO DE FECHAS (SOPORTA DD/MM/AAAA DEL ERP Y AAAA-MM-DD DEL CELULAR)
+        function parseFechaPedido(fechaStr) {
+            if (!fechaStr) return new Date();
+            const clean = String(fechaStr).trim().split(' ')[0].split('T')[0];
+            if (clean.includes('/')) {
+                const p = clean.split('/');
+                if (p.length === 3) {
+                    return new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]), 12, 0, 0);
+                }
+            }
+            if (clean.includes('-')) {
+                const p = clean.split('-');
+                if (p[0].length === 4) {
+                    return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 12, 0, 0);
+                } else if (p.length === 3) {
+                    return new Date(Number(p[2]), Number(p[1]) - 1, Number(p[0]), 12, 0, 0);
+                }
+            }
+            const d = new Date(fechaStr);
+            return isNaN(d.getTime()) ? new Date() : d;
         }
 
         function obtenerDatosProducto(p) {
@@ -330,7 +352,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24', 'nexo_preventa_stock_v25', 'nexo_preventa_stock_v26', 'nexo_preventa_stock_v27'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24', 'nexo_preventa_stock_v25', 'nexo_preventa_stock_v26', 'nexo_preventa_stock_v27', 'nexo_preventa_stock_v28'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -390,16 +412,32 @@
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
 
-                DB.pedidosSemana = data.orders.filter(o => {
+                // Filtramos los pedidos que vienen del ERP convirtiendo bien la fecha DD/MM/AAAA
+                const pedidosDesdeNube = data.orders.filter(o => {
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
-                    if (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed)) return false;
+                    if (!vendPed || (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed))) return false;
 
-                    if (o.fecha) {
-                        const fechaPed = new Date(o.fecha);
-                        return fechaPed >= inicioCiclo;
-                    }
-                    return true;
+                    const fechaObj = parseFechaPedido(o.fecha || o.date);
+                    return fechaObj >= inicioCiclo;
                 });
+
+                // Conservamos también los pedidos recién emitidos en el celular que aún estén en proceso de sincronización
+                const mapaPedidos = new Map();
+                (DB.pedidosSemana || []).forEach(pLocal => {
+                    const vendPed = (pLocal.seller || pLocal.vendedor || '').toLowerCase().trim();
+                    if (vendPed && (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed))) {
+                        const fechaObj = parseFechaPedido(pLocal.fecha || pLocal.date);
+                        if (fechaObj >= inicioCiclo) {
+                            mapaPedidos.set(String(pLocal.id), pLocal);
+                        }
+                    }
+                });
+
+                pedidosDesdeNube.forEach(pNube => {
+                    mapaPedidos.set(String(pNube.id), pNube);
+                });
+
+                DB.pedidosSemana = Array.from(mapaPedidos.values());
             }
 
             saveDB();
@@ -726,7 +764,6 @@
 
             if (badgeCant) badgeCant.textContent = `${misClientes.length} de ${todos.length}`;
 
-            // ESTÉTICA LIMPIA: Se usa hidden para que el texto de instrucción actúe como título y no aparezca listado como opción seleccionable
             if (misClientes.length === 0) {
                 sel.innerHTML = '<option value="" disabled selected hidden>-- No tenés clientes en tu cartera --</option>';
             } else {
@@ -1038,19 +1075,22 @@
 
         function actualizarKpisSemanales() {
             const pedidos = DB.pedidosSemana || [];
-            let totalVenta = 0, totalComision = 0;
+            let totalVenta = 0, totalComision = 0, cantPedidos = 0;
             const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
+            const inicioCiclo = obtenerInicioSemanaComercialActual();
 
             pedidos.forEach(p => {
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
-                if (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) {
+                const fechaObj = parseFechaPedido(p.fecha || p.date);
+                if ((vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) && fechaObj >= inicioCiclo) {
                     totalVenta += (Number(p.total_venta || p.total) || 0);
                     totalComision += (Number(p.comision_vendedor || p.sellerCommission) || 0);
+                    cantPedidos++;
                 }
             });
 
             document.getElementById('kpiVentaSemanal').textContent = fmtMoneda(totalVenta);
-            document.getElementById('kpiCantPedidosSemanal').textContent = `${pedidos.length} pedido${pedidos.length === 1 ? '' : 's'}`;
+            document.getElementById('kpiCantPedidosSemanal').textContent = `${cantPedidos} pedido${cantPedidos === 1 ? '' : 's'}`;
             document.getElementById('kpiComisionSemanal').textContent = fmtMoneda(totalComision);
             const pct = totalVenta > 0 ? ((totalComision / totalVenta) * 100).toFixed(1) : 0;
             document.getElementById('kpiPctComisionProm').textContent = `${pct}% prom.`;
