@@ -130,7 +130,7 @@
                     </button>
                 </div>
                 <select id="selCliente" class="input-mobile w-full px-3 py-2.5 text-xs font-semibold text-white outline-none cursor-pointer">
-                    <option value="">Seleccionar cliente...</option>
+                    <option value="" disabled selected hidden>Seleccionar cliente...</option>
                 </select>
             </div>
 
@@ -282,7 +282,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v27';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v28';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -330,7 +330,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24', 'nexo_preventa_stock_v25', 'nexo_preventa_stock_v26'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24', 'nexo_preventa_stock_v25', 'nexo_preventa_stock_v26', 'nexo_preventa_stock_v27'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -726,11 +726,11 @@
 
             if (badgeCant) badgeCant.textContent = `${misClientes.length} de ${todos.length}`;
 
-            // CORRECCIÓN ESTÉTICA: Se quita el 'disabled' y se deja como un texto selector normal que indica la acción
+            // ESTÉTICA LIMPIA: Se usa hidden para que el texto de instrucción actúe como título y no aparezca listado como opción seleccionable
             if (misClientes.length === 0) {
-                sel.innerHTML = '<option value="">-- No tenés clientes en tu cartera --</option>';
+                sel.innerHTML = '<option value="" disabled selected hidden>-- No tenés clientes en tu cartera --</option>';
             } else {
-                sel.innerHTML = '<option value="">Seleccionar cliente...</option>' +
+                sel.innerHTML = '<option value="" disabled selected hidden>Seleccionar cliente...</option>' +
                     misClientes.map(c => {
                         const rawAddr = c.addr || c.direccion || '';
                         const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
@@ -944,6 +944,11 @@
 
         async function confirmarYGuardarPedido() {
             const clienteId = document.getElementById('selCliente')?.value || '';
+            if (!clienteId) {
+                alert('Por favor, seleccioná un cliente antes de confirmar el pedido.');
+                return;
+            }
+
             const cliente = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
             const nombreFallback = document.getElementById('resumenModalClienteNombre')?.textContent || 'Cliente General';
             const dirFallback = document.getElementById('resumenModalClienteDir')?.textContent || '';
