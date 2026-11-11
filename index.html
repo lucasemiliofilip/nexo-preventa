@@ -130,7 +130,7 @@
                     </button>
                 </div>
                 <select id="selCliente" class="input-mobile w-full px-3 py-2.5 text-xs font-semibold text-white outline-none cursor-pointer">
-                    <option value="">-- Seleccionar de mis clientes --</option>
+                    <option value="" disabled selected>-- Seleccionar de mis clientes --</option>
                 </select>
             </div>
 
@@ -282,7 +282,7 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v25';
+        const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v26';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -330,7 +330,7 @@
 
         function initApp() {
             try {
-                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24'].forEach(k => localStorage.removeItem(k));
+                ['nexo_preventa_db_v3', 'nexo_preventa_db_v6', 'nexo_preventa_db_v7', 'nexo_preventa_db_v8', 'nexo_preventa_db_v9', 'nexo_preventa_db_v10', 'nexo_preventa_db_v11', 'nexo_preventa_db_v12', 'nexo_preventa_cloud_sync_v15', 'nexo_preventa_clean_v16', 'nexo_preventa_pdf_direct_v18', 'nexo_preventa_sync_v19', 'nexo_preventa_sync_v20', 'nexo_preventa_stock_v21', 'nexo_preventa_stock_v22', 'nexo_preventa_stock_v23', 'nexo_preventa_stock_v24', 'nexo_preventa_stock_v25'].forEach(k => localStorage.removeItem(k));
 
                 const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
                 if (raw) {
@@ -714,24 +714,23 @@
             const todos = DB.clientes || [];
             const activo = (DB.vendedorActivo || '').toLowerCase().trim();
 
-            // FILTRADO ESTRICTO POR CARTERA DE VENDEDOR
             const misClientes = todos.filter(c => {
                 let vendCliente = (c.seller || c.vendedor || '').toLowerCase().trim();
                 const rawAddr = c.addr || c.direccion || '';
                 if (!vendCliente && rawAddr.includes('|||')) {
                     vendCliente = rawAddr.split('|||')[1].toLowerCase().trim();
                 }
-                // Si el cliente no tiene vendedor asignado, o si el vendedor asignado coincide exactamente con el activo
                 if (!vendCliente) return true; 
                 return vendCliente === activo;
             });
 
             if (badgeCant) badgeCant.textContent = `${misClientes.length} de ${todos.length}`;
 
+            // CORRECCIÓN: Se añade 'disabled selected' para que el texto guía no sea seleccionable
             if (misClientes.length === 0) {
-                sel.innerHTML = '<option value="">-- No tenés clientes en tu cartera (Tocá + Nuevo) --</option>';
+                sel.innerHTML = '<option value="" disabled selected>-- No tenés clientes en tu cartera (Tocá + Nuevo) --</option>';
             } else {
-                sel.innerHTML = '<option value="">-- Seleccionar cliente (' + misClientes.length + ') --</option>' +
+                sel.innerHTML = '<option value="" disabled selected>-- Seleccionar cliente (' + misClientes.length + ') --</option>' +
                     misClientes.map(c => {
                         const rawAddr = c.addr || c.direccion || '';
                         const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
