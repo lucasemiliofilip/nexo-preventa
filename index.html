@@ -89,8 +89,8 @@
                                 <span class="text-[10px] font-bold">PIN</span>
                             </div>
                             <div class="w-px h-3 bg-slate-700"></div>
-                            <button onclick="abrirModalListaPrecios()" class="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg text-emerald-400 hover:bg-emerald-500/25 transition cursor-pointer">
-                                <i class="fa-solid fa-file-pdf text-[10px]"></i>
+                            <button id="btnHeaderListaPrecios" onclick="compartirListaPreciosDirecto()" class="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition cursor-pointer">
+                                <i class="fa-solid fa-share-nodes text-[10px]"></i>
                                 <span class="text-[10px] font-bold">Lista de Precios</span>
                             </button>
                         </div>
@@ -176,6 +176,32 @@
         </main>
     </div>
 
+    <!-- CONTENEDOR INVISIBLE PARA GENERAR EL PDF SIN DESCARGARLO -->
+    <div style="position: fixed; left: -9999px; top: 0; width: 794px; background: #ffffff; z-index: -10; pointer-events: none;">
+        <div id="contenedorRenderPDFOculto"></div>
+    </div>
+
+    <!-- MODAL DE UN TOQUE (SOLO SI EL NAVEGADOR DEL CELULAR PIDE CONFIRMACIÓN AL ABRIR COMPARTIR) -->
+    <div id="modalConfirmarCompartirPDF" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-xs rounded-2xl p-5 text-center space-y-4 shadow-2xl">
+            <div class="mx-auto w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-2xl">
+                <i class="fa-brands fa-whatsapp"></i>
+            </div>
+            <div>
+                <h3 class="text-sm font-black uppercase text-white">Lista de Precios Lista</h3>
+                <p class="text-xs text-slate-400 mt-1">Tocá el botón para abrir el menú de compartir y elegir el contacto de WhatsApp.</p>
+            </div>
+            <div class="space-y-2">
+                <button onclick="ejecutarShareNativoConArchivoListo()" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-share-nodes"></i> Compartir con...
+                </button>
+                <button onclick="cerrarModalConfirmarCompartir()" class="w-full bg-slate-800 text-slate-400 text-xs font-bold py-2.5 rounded-xl cursor-pointer">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- BARRA INFERIOR -->
     <div id="barraFlotantePedido" class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-3.5 z-40">
         <div class="max-w-md mx-auto flex items-center justify-between gap-3">
@@ -186,28 +212,6 @@
             <button onclick="abrirResumenPedidoModal()" id="btnVerPedido" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase px-5 py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5">
                 <i class="fa-solid fa-paper-plane"></i> Enviar
             </button>
-        </div>
-    </div>
-
-    <!-- MODAL VISTA PREVIA LISTA DE PRECIOS -->
-    <div id="modalReporteEmergente" class="hidden fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4">
-        <div class="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-2xl flex flex-col shadow-2xl max-h-[92vh]">
-            <div class="flex flex-wrap justify-between items-center gap-2 border-b border-slate-800 p-3.5 bg-slate-950 rounded-t-2xl">
-                <h3 class="text-xs sm:text-sm font-black uppercase text-white flex items-center gap-2">
-                    <i class="fa-solid fa-file-pdf text-emerald-400"></i> Lista de Precios Oficial
-                </h3>
-                <div class="flex items-center gap-2">
-                    <button onclick="compartirArchivoPDFWhatsApp()" id="btnCompartirPDFWhatsApp" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-black px-4 py-2 rounded-xl flex items-center gap-2 transition cursor-pointer shadow-lg shadow-emerald-600/30">
-                        <i class="fa-brands fa-whatsapp text-sm"></i> Enviar PDF por WhatsApp
-                    </button>
-                    <button onclick="descargarPDFDirecto()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition cursor-pointer" title="Descargar copia del PDF">
-                        <i class="fa-solid fa-download"></i>
-                    </button>
-                    <button onclick="cerrarModalReporte()" class="text-slate-400 hover:text-white px-2 py-1 cursor-pointer font-bold text-base">✕</button>
-                </div>
-            </div>
-            <div id="modalReporteContenido" class="p-4 sm:p-6 overflow-y-auto flex-1 bg-white text-slate-900 rounded-b-2xl">
-            </div>
         </div>
     </div>
 
@@ -311,6 +315,7 @@
 
         let carrito = {};
         let soloPromosActivas = false;
+        let archivoPDFListoParaCompartir = null;
 
         function esVendedorValidoPreventa(nombre) {
             if (!nombre) return false;
@@ -344,7 +349,6 @@
             } catch (e) {}
         }
 
-        // Devuelve el PIN personalizado del vendedor o '1234' si nunca lo cambió
         function obtenerPinEsperadoVendedor(nombreVendedor) {
             if (!nombreVendedor) return '1234';
             const nombreLimpio = String(nombreVendedor).trim();
@@ -414,7 +418,6 @@
                 }
             } catch (e) {}
 
-            // Sincroniza y prioriza los PINs personalizados guardados en el dispositivo
             const pinsGuardados = obtenerPinsGuardadosLocalmente();
             DB.vendedoresPins = Object.assign({}, DB.vendedoresPins || {}, pinsGuardados);
             guardarPinsLocalmente(DB.vendedoresPins);
@@ -477,7 +480,6 @@
             if (data.bizConfig) DB.bizConfig = data.bizConfig;
             DB.catalogo = Array.isArray(data.catalog) ? data.catalog : [];
             
-            // SINCRONIZACIÓN DINÁMICA DE VENDEDORES DESDE EL ERP (EXCLUYENDO MOSTRADOR)
             if (Array.isArray(data.sellers) && data.sellers.length > 0) {
                 const filtrados = data.sellers
                     .map(s => String(s.name || '').trim())
@@ -550,7 +552,6 @@
                     const pinsLocal = obtenerPinsGuardadosLocalmente();
                     const combinados = Object.assign({}, DB.vendedoresPins || {});
 
-                    // Incorporamos los PINs de la nube sin permitir que un '1234' viejo pise un PIN personalizado local
                     Object.keys(pinsNube).forEach(vend => {
                         const pinNube = String(pinsNube[vend] || '').trim();
                         const pinLoc = String(pinsLocal[vend] || '').trim();
@@ -606,28 +607,21 @@
             renderCatalogo(document.getElementById('inputBuscarProd').value);
         }
 
-        function abrirModalListaPrecios() {
-            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
-            if (prods.length === 0) {
-                alert('No hay productos activos cargados.');
-                return;
-            }
-
-            const contenidoEl = document.getElementById('modalReporteContenido');
+        // --- GENERA EL HTML CON EL FORMATO OFICIAL DE LISTA DE PRECIOS DEL ERP ---
+        function construirHTMLListaPreciosERP(prods) {
             const hoy = new Date().toLocaleDateString('es-AR');
             const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA / COMERCIO';
             const bizContact = (DB.bizConfig && DB.bizConfig.contact) ? DB.bizConfig.contact : 'Presidencia Roque Sáenz Peña, Chaco';
 
             let html = `
-                <div id="hojaImprimiblePDF" style="background:#ffffff; color:#0f172a; padding:6px; font-family:sans-serif;">
-                    <div style="border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end;">
+                <div id="hojaImprimiblePDF" style="background:#ffffff; color:#0f172a; padding:14px; font-family:sans-serif; font-size:11px;">
+                    <div style="border-bottom: 2.5px solid #0f172a; padding-bottom: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-end;">
                         <div>
-                            <span style="background: #dbeafe; color: #1e40af; font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 9px; text-transform: uppercase;">Lista de Precios Oficial</span>
-                            <h1 style="font-size: 18px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 4px 0 0 0;">${bizName}</h1>
-                            <p style="font-size: 10px; color: #64748b; margin: 0;">${bizContact}</p>
+                            <h1 style="font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 0;">${bizName}</h1>
+                            <div style="font-size: 10px; color: #475569; margin-top: 2px;">${bizContact} • LISTA DE PRECIOS OFICIAL</div>
                         </div>
-                        <div style="text-align: right; font-size: 10px; color: #64748b;">
-                            Vigencia: <strong>${hoy}</strong>
+                        <div style="text-align: right; font-size: 10px; color: #475569;">
+                            Lista vigente: <strong>${hoy}</strong>
                         </div>
                     </div>
             `;
@@ -635,17 +629,17 @@
             const destacados = prods.filter(p => p.isFeatured);
             if (destacados.length > 0) {
                 html += `
-                    <div style="margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #f59e0b; background: #fffbeb;">
-                        <h3 style="font-size: 11px; font-weight: 900; color: #92400e; text-transform: uppercase; margin: 0 0 6px 0;">🔥 ACCIONES COMERCIALES Y PROMOCIONES</h3>
+                    <div style="margin-bottom: 14px; padding: 10px 12px; border-radius: 6px; border: 1.5px solid #f59e0b; background: #fffbeb;">
+                        <div style="font-size: 11px; font-weight: 900; color: #92400e; text-transform: uppercase; margin-bottom: 6px;">🔥 ACCIONES COMERCIALES Y PROMOCIONES</div>
                         <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
                             <tbody>
                                 ${destacados.map(p => `
                                     <tr style="border-bottom: 1px solid #fde68a;">
-                                        <td style="padding: 5px 2px; font-weight: 800; color: #0f172a;">
+                                        <td style="padding: 5px 4px; font-weight: 800; color: #0f172a;">
                                             ${p.nombre} <span style="font-weight:normal; color:#64748b; font-size:10px;">(${p.presentacion})</span>
                                             ${p.promoText ? `<div style="color: #b45309; font-size: 10px; font-weight: 700;">⚡ ${p.promoText}</div>` : ''}
                                         </td>
-                                        <td style="padding: 5px 2px; text-align: right; font-family: monospace; font-weight: 900; color: #047857; white-space: nowrap;">${fmtMoneda(p.pvp)}</td>
+                                        <td style="padding: 5px 4px; text-align: right; font-family: monospace; font-size: 13px; font-weight: 900; color: #047857; white-space: nowrap;">${fmtMoneda(p.pvp)}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -656,97 +650,117 @@
 
             const agrupados = {};
             prods.forEach(p => {
-                const cat = (p.categoria || 'GENERAL').toUpperCase();
+                const cat = (p.categoria || 'General');
                 if (!agrupados[cat]) agrupados[cat] = [];
                 agrupados[cat].push(p);
             });
 
             for (const cat of Object.keys(agrupados).sort()) {
-                html += `<h3 style="font-size: 11px; font-weight: 900; text-transform: uppercase; background: #0f172a; color: #fff; padding: 4px 8px; border-radius: 4px; margin-top: 10px; margin-bottom: 4px;">${cat}</h3>`;
-                html += `<table style="width: 100%; font-size: 11px; border-collapse: collapse; margin-bottom: 8px;"><thead><tr style="border-bottom: 1px solid #cbd5e1; color: #475569; text-transform: uppercase; font-size: 9px;"><th style="padding: 4px; text-align: left;">Artículo</th><th style="padding: 4px; text-align: center;">Presentación</th><th style="padding: 4px; text-align: right;">Precio Final</th></tr></thead><tbody>`;
-                agrupados[cat].forEach(p => {
-                    html += `
-                        <tr style="border-bottom: 1px solid #f1f5f9;">
-                            <td style="padding: 5px 4px; font-weight: 700; color: #1e293b;">
-                                ${p.nombre}
-                                ${p.isFeatured ? `<span style="background:#fef3c7; color:#92400e; font-size:9px; padding:1px 5px; border-radius:4px; margin-left:4px;">🔥 ${p.promoText || 'PROMO'}</span>` : ''}
-                            </td>
-                            <td style="padding: 5px 4px; text-align: center; color: #64748b; font-size: 10px;">${p.presentacion}</td>
-                            <td style="padding: 5px 4px; text-align: right; font-family: monospace; font-weight: 900; color: #047857; white-space: nowrap;">${fmtMoneda(p.pvp)}</td>
-                        </tr>
-                    `;
-                });
-                html += `</tbody></table>`;
+                html += `
+                    <div style="background: #0f172a; color: #ffffff; padding: 5px 8px; font-weight: 900; text-transform: uppercase; font-size: 11px; margin-top: 14px; margin-bottom: 6px; border-radius: 4px;">
+                        ${cat}
+                    </div>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 11px;">
+                        <thead>
+                            <tr>
+                                <th style="border-bottom: 1.5px solid #0f172a; padding: 6px 8px; text-align: left; font-size: 9.5px; text-transform: uppercase; color: #475569;">ARTÍCULO / DESCRIPCIÓN</th>
+                                <th style="border-bottom: 1.5px solid #0f172a; padding: 6px 8px; text-align: left; font-size: 9.5px; text-transform: uppercase; color: #475569; width: 130px;">PRESENTACIÓN</th>
+                                <th style="border-bottom: 1.5px solid #0f172a; padding: 6px 8px; text-align: right; font-size: 9.5px; text-transform: uppercase; color: #475569; width: 110px;">PRECIO FINAL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${agrupados[cat].map(p => `
+                                <tr>
+                                    <td style="padding: 6px 8px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">
+                                        <strong>${p.nombre}</strong>
+                                        ${p.isFeatured ? `<span style="background:#fef3c7; color:#92400e; font-size:9px; font-weight:800; padding:1px 5px; border-radius:4px; margin-left:4px;">🔥 ${p.promoText || 'PROMO'}</span>` : ''}
+                                    </td>
+                                    <td style="padding: 6px 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">${p.presentacion || '-'}</td>
+                                    <td style="padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-size: 13px; font-weight: 900; color: #047857; text-align: right; white-space: nowrap;">${fmtMoneda(p.pvp)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
             }
 
             html += `</div>`;
-            contenidoEl.innerHTML = html;
-            document.getElementById('modalReporteEmergente').classList.remove('hidden');
+            return html;
         }
 
-        function cerrarModalReporte() {
-            document.getElementById('modalReporteEmergente').classList.add('hidden');
-        }
+        // --- COMPARTIR LISTA DE PRECIOS DIRECTO POR WHATSAPP (SIN DESCARGAR) ---
+        async function compartirListaPreciosDirecto() {
+            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            if (prods.length === 0) {
+                alert('No hay productos activos cargados en la lista.');
+                return;
+            }
 
-        async function compartirArchivoPDFWhatsApp() {
-            const btn = document.getElementById('btnCompartirPDFWhatsApp');
-            const textoOriginal = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-sm"></i> Generando PDF...';
-            btn.disabled = true;
-
-            const elemento = document.getElementById('hojaImprimiblePDF');
-            const hoy = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
-            const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Distribuidora';
-            const nombreArchivo = `Lista_Precios_${bizName}_${hoy}.pdf`;
-
-            const opciones = {
-                margin: [8, 8, 8, 8],
-                filename: nombreArchivo,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, logging: false },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
+            const btn = document.getElementById('btnHeaderListaPrecios');
+            const htmlOriginalBtn = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[10px]"></i> <span class="text-[10px] font-bold">Preparando...</span>';
+                btn.disabled = true;
+            }
 
             try {
-                const pdfBlob = await html2pdf().set(opciones).from(elemento).outputPdf('blob');
-                const pdfFile = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+                const contenedorOculto = document.getElementById('contenedorRenderPDFOculto');
+                contenedorOculto.innerHTML = construirHTMLListaPreciosERP(prods);
+                const elemento = document.getElementById('hojaImprimiblePDF');
 
-                if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+                const hoy = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
+                const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Distribuidora';
+                const nombreArchivo = `Lista_Precios_${bizName}_${hoy}.pdf`;
+
+                const opciones = {
+                    margin: [8, 8, 8, 8],
+                    filename: nombreArchivo,
+                    image: { type: 'jpeg', quality: 0.95 },
+                    html2canvas: { scale: 1.6, useCORS: true, logging: false },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                const pdfBlob = await html2pdf().set(opciones).from(elemento).outputPdf('blob');
+                archivoPDFListoParaCompartir = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+
+                if (navigator.canShare && navigator.canShare({ files: [archivoPDFListoParaCompartir] })) {
                     await navigator.share({
-                        files: [pdfFile],
-                        title: `Lista de Precios Oficial - ${DB.bizConfig.name || ''}`,
+                        files: [archivoPDFListoParaCompartir],
+                        title: `Lista de Precios Oficial - ${(DB.bizConfig && DB.bizConfig.name) || ''}`,
                         text: `Adjunto la Lista de Precios Oficial vigente al ${new Date().toLocaleDateString('es-AR')}.`
                     });
                 } else {
-                    html2pdf().set(opciones).from(elemento).save();
-                    alert('PDF generado y descargado en tu dispositivo. Podés adjuntarlo directamente en WhatsApp.');
+                    alert('Tu navegador móvil no admite compartir archivos directos. Abrí este enlace desde Google Chrome o Safari en el celular.');
                 }
             } catch (err) {
-                if (err.name !== 'AbortError') {
-                    console.error('Error al compartir PDF:', err);
-                    html2pdf().set(opciones).from(elemento).save();
+                if (err.name === 'NotAllowedError') {
+                    // Si el teléfono expiró el toque mientras generaba el PDF, abre el botón directo de 1 toque
+                    document.getElementById('modalConfirmarCompartirPDF')?.classList.remove('hidden');
+                } else if (err.name !== 'AbortError') {
+                    alert('No se pudo abrir el menú de compartir: ' + (err.message || err));
                 }
             } finally {
-                btn.innerHTML = textoOriginal;
-                btn.disabled = false;
+                if (btn) {
+                    btn.innerHTML = htmlOriginalBtn;
+                    btn.disabled = false;
+                }
             }
         }
 
-        function descargarPDFDirecto() {
-            const elemento = document.getElementById('hojaImprimiblePDF');
-            const hoy = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
-            const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Distribuidora';
-            const nombreArchivo = `Lista_Precios_${bizName}_${hoy}.pdf`;
+        async function ejecutarShareNativoConArchivoListo() {
+            cerrarModalConfirmarCompartir();
+            if (!archivoPDFListoParaCompartir) return;
+            try {
+                await navigator.share({
+                    files: [archivoPDFListoParaCompartir],
+                    title: `Lista de Precios Oficial - ${(DB.bizConfig && DB.bizConfig.name) || ''}`,
+                    text: `Adjunto la Lista de Precios Oficial vigente al ${new Date().toLocaleDateString('es-AR')}.`
+                });
+            } catch (e) {}
+        }
 
-            const opciones = {
-                margin: [8, 8, 8, 8],
-                filename: nombreArchivo,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, logging: false },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-            };
-
-            html2pdf().set(opciones).from(elemento).save();
+        function cerrarModalConfirmarCompartir() {
+            document.getElementById('modalConfirmarCompartirPDF')?.classList.add('hidden');
         }
 
         function abrirCambioPinModal() {
@@ -760,7 +774,6 @@
             document.getElementById('modalCambiarPin').classList.add('hidden');
         }
 
-        // --- CAMBIO DE PIN ESTRICTO (ANULA EL 1234 UNA VEZ CAMBIADO) ---
         function guardarNuevoPin() {
             const actual = document.getElementById('pinActualInput').value.trim();
             const nuevo = document.getElementById('pinNuevoInput').value.trim();
@@ -858,7 +871,6 @@
             }
         }
 
-        // --- LOGIN CON CANDADO DE VENDEDOR ÚNICO POR DISPOSITIVO ---
         function mostrarPantallaLogin() {
             const loginModal = document.getElementById('pantallaLogin');
             const sel = document.getElementById('loginVendedorSelect');
@@ -923,7 +935,6 @@
                 return;
             }
 
-            // Validación estricta contra el PIN actual del vendedor (sin puerta trasera 1234)
             const pinEsperado = obtenerPinEsperadoVendedor(vendedorElegido);
             if (pinIngresado !== pinEsperado) {
                 alert('Contraseña incorrecta.');
