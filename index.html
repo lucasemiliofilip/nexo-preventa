@@ -115,9 +115,14 @@
                             <strong id="lblNombreClienteEditando" class="text-xs text-white font-black">-</strong>
                         </div>
                     </div>
-                    <button onclick="cancelarModoEdicionCatalogo()" class="bg-slate-900 hover:bg-slate-800 text-rose-300 border border-rose-500/40 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg cursor-pointer">
-                        ✕ Salir sin guardar
-                    </button>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="confirmarEliminarPedido(pedidoEditandoCatalogoId)" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg cursor-pointer">
+                            <i class="fa-solid fa-trash-can"></i> Anular
+                        </button>
+                        <button onclick="cancelarModoEdicionCatalogo()" class="bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg cursor-pointer">
+                            ✕ Salir
+                        </button>
+                    </div>
                 </div>
                 <p class="text-[11px] text-amber-200">Sumá o quitá productos en la lista de abajo y tocá <strong>"Guardar Cambios"</strong> en la barra inferior.</p>
             </div>
@@ -144,7 +149,7 @@
                 </div>
             </div>
 
-            <!-- MIS PEDIDOS CARGADOS (VER Y EDITAR PEDIDOS DE CLIENTES) -->
+            <!-- MIS PEDIDOS CARGADOS (VER, EDITAR Y ELIMINAR PEDIDOS DE CLIENTES) -->
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
                 <div class="flex items-center justify-between cursor-pointer" onclick="toggleAcordeonMisPedidos()">
                     <div class="flex items-center gap-2">
@@ -252,9 +257,9 @@
         </div>
     </div>
 
-    <!-- MODAL VER Y EDITAR PEDIDO EXISTENTE DE UN CLIENTE -->
+    <!-- MODAL VER, EDITAR Y ELIMINAR PEDIDO EXISTENTE DE UN CLIENTE -->
     <div id="modalDetalleEditarPedido" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-2.5">
-        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-4 space-y-3.5 shadow-2xl max-h-[94vh] flex flex-col">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-4 space-y-3 shadow-2xl max-h-[95vh] flex flex-col">
             <!-- Encabezado del Modal -->
             <div class="flex justify-between items-start border-b border-slate-800 pb-2.5">
                 <div>
@@ -285,7 +290,7 @@
             </div>
 
             <!-- Lista de Productos del Pedido con + / - en vivo -->
-            <div class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[140px]" id="editModalItemsContenedor"></div>
+            <div class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[130px]" id="editModalItemsContenedor"></div>
 
             <!-- Buscador rápido para agregar otro artículo sin salir del modal -->
             <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 space-y-2">
@@ -322,13 +327,18 @@
                 </div>
             </div>
 
-            <!-- Botones de Acción -->
-            <div class="grid grid-cols-2 gap-2 pt-1">
-                <button onclick="cerrarModalEditarPedido()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">
-                    Cerrar
-                </button>
-                <button id="btnGuardarPedidoEditadoModal" onclick="guardarCambiosPedidoDesdeModal()" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-1.5">
-                    <i class="fa-solid fa-floppy-disk"></i> Guardar Cambios
+            <!-- Botones de Acción (Guardar / Cerrar / Eliminar Pedido) -->
+            <div class="space-y-2 pt-1">
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="cerrarModalEditarPedido()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer">
+                        Cerrar
+                    </button>
+                    <button id="btnGuardarPedidoEditadoModal" onclick="guardarCambiosPedidoDesdeModal()" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 text-xs font-black uppercase py-2.5 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-floppy-disk"></i> Guardar Cambios
+                    </button>
+                </div>
+                <button type="button" id="btnEliminarPedidoModal" onclick="confirmarEliminarPedido(pedidoEditandoModalId)" class="w-full bg-rose-500/15 hover:bg-rose-500/25 active:scale-98 border border-rose-500/40 text-rose-300 text-[11px] font-extrabold uppercase py-2 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-trash-can"></i> Anular / Eliminar este Pedido por Completo
                 </button>
             </div>
         </div>
@@ -452,7 +462,8 @@
             clientes: [],
             clientesLocalesNuevos: [],
             vendedores: ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'],
-            pedidosSemana: []
+            pedidosSemana: [],
+            pedidosEliminadosIds: []
         };
 
         let carrito = {};
@@ -831,6 +842,34 @@
             return mapa;
         }
 
+        // Extrae absolutamente todas las unidades físicas descontadas por el pedido (incluyendo regalos $0)
+        function extraerTodoElStockFisicoDePedido(ped) {
+            const mapaStock = {};
+            if (!ped || !Array.isArray(ped.items)) return mapaStock;
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+
+            ped.items.forEach(it => {
+                const idProd = String(it.id_producto || it.productId || it.id || '');
+                const desc = String(it.descripcion || it.name || '');
+                const precio = Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price);
+                const cant = Number(it.cantidad !== undefined ? it.cantidad : it.qty) || 0;
+
+                if (idProd === 'PROMO_TICKET_DESCUENTO' || precio < 0 || cant <= 0) return;
+
+                let prodMatch = catalogMap.find(x => String(x.id) === idProd);
+                if (!prodMatch && desc) {
+                    const descLimpia = desc.split('[')[0].replace('🎁', '').trim().toLowerCase();
+                    prodMatch = catalogMap.find(x => x.nombre.toLowerCase().trim() === descLimpia);
+                }
+
+                const keyFinal = prodMatch ? String(prodMatch.id) : idProd;
+                if (keyFinal) {
+                    mapaStock[keyFinal] = (mapaStock[keyFinal] || 0) + cant;
+                }
+            });
+            return mapaStock;
+        }
+
         function toggleAcordeonMisPedidos() {
             acordeonMisPedidosAbierto = !acordeonMisPedidosAbierto;
             const body = document.getElementById('cuerpoMisPedidosCargados');
@@ -852,8 +891,10 @@
             const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
             const inicioCiclo = obtenerInicioSemanaComercialActual();
             const q = (document.getElementById('inputBuscarPedidoCargado')?.value || '').trim().toLowerCase();
+            const eliminadosLocal = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds.map(String) : [];
 
             const misPedidos = (DB.pedidosSemana || []).filter(p => {
+                if (eliminadosLocal.includes(String(p.id))) return false;
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
                 const fechaObj = parseFechaPedido(p.fecha || p.date);
                 return (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) && fechaObj >= inicioCiclo;
@@ -887,7 +928,7 @@
                 const fechaTxt = formatearFechaHoraCorta(ped.fecha || ped.date);
 
                 return `
-                    <div onclick="abrirModalEditarPedido('${ped.id}')" class="bg-slate-950 hover:bg-slate-900/90 active:scale-[0.99] border border-slate-800 hover:border-cyan-500/50 rounded-xl p-3 flex items-center justify-between gap-2.5 cursor-pointer transition shadow">
+                    <div onclick="abrirModalEditarPedido('${ped.id}')" class="bg-slate-950 hover:bg-slate-900/90 active:scale-[0.99] border border-slate-800 hover:border-cyan-500/50 rounded-xl p-3 flex items-center justify-between gap-2 cursor-pointer transition shadow">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-1.5 flex-wrap">
                                 <strong class="text-xs font-black text-white truncate">${nomCli}</strong>
@@ -897,15 +938,137 @@
                                 ${totalBultos} bultos ${dirCli ? `• ${dirCli}` : ''} ${fechaTxt ? `• ${fechaTxt}` : ''}
                             </span>
                         </div>
-                        <div class="text-right flex-shrink-0">
-                            <span class="text-sm font-mono font-black text-emerald-400 block">${fmtMoneda(total)}</span>
-                            <span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-cyan-400">
-                                <i class="fa-solid fa-pen-to-square"></i> Ver / Sumar
-                            </span>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <div class="text-right">
+                                <span class="text-sm font-mono font-black text-emerald-400 block">${fmtMoneda(total)}</span>
+                                <span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-cyan-400">
+                                    <i class="fa-solid fa-pen-to-square"></i> Ver / Sumar
+                                </span>
+                            </div>
+                            <button 
+                                type="button" 
+                                onclick="event.stopPropagation(); confirmarEliminarPedido('${ped.id}')" 
+                                class="w-8 h-8 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/40 text-rose-400 flex items-center justify-center cursor-pointer transition"
+                                title="Anular / Eliminar Pedido"
+                            >
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
                         </div>
                     </div>
                 `;
             }).join('');
+        }
+
+        // --- FUNCIÓN PARA ELIMINAR / ANULAR UN PEDIDO COMPLETO Y DEVOLVER STOCK ---
+        async function confirmarEliminarPedido(orderId) {
+            if (!orderId) return;
+            const ped = (DB.pedidosSemana || []).find(p => String(p.id) === String(orderId));
+            if (!ped) {
+                alert('No se encontró el pedido para eliminar.');
+                return;
+            }
+
+            const nomCli = obtenerNombreClienteDePedido(ped);
+            const total = Number(ped.total_venta !== undefined ? ped.total_venta : ped.total) || 0;
+
+            const ok = confirm(`🗑️ ¿Estás seguro de ANULAR y ELIMINAR por completo el pedido de "${nomCli}" por ${fmtMoneda(total)}?\n\n• Se devolverá el stock al depósito.\n• Se quitará del ERP y de tu venta semanal.`);
+            if (!ok) return;
+
+            const btnModal = document.getElementById('btnEliminarPedidoModal');
+            const htmlOrigBtn = btnModal ? btnModal.innerHTML : '';
+            if (btnModal) {
+                btnModal.disabled = true;
+                btnModal.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> Eliminando pedido...';
+            }
+
+            try {
+                // 1. Calcular todo el stock físico que había descontado este pedido para devolverlo
+                const stockADevolver = extraerTodoElStockFisicoDePedido(ped);
+
+                // Devolver stock en el catálogo local del celular
+                Object.keys(stockADevolver).forEach(idProd => {
+                    const cantDev = Number(stockADevolver[idProd]) || 0;
+                    if (cantDev > 0) {
+                        const rawProd = (DB.catalogo || []).find(x => String(x.id || x.codigo || x.sku) === String(idProd));
+                        if (rawProd) {
+                            rawProd.stock = (Number(rawProd.stock) || 0) + cantDev;
+                        }
+                    }
+                });
+
+                // 2. Eliminar de Firebase (colección `pedidos` y documento `nexo_erp/datos_globales`)
+                const promesas = [];
+
+                const snapPedidos = await db.collection('pedidos').where('id', '==', String(orderId)).get();
+                snapPedidos.forEach(docSnap => {
+                    promesas.push(docSnap.ref.delete());
+                });
+
+                const globalRef = db.collection('nexo_erp').doc('datos_globales');
+                const globalDoc = await globalRef.get();
+                if (globalDoc.exists) {
+                    const gData = globalDoc.data() || {};
+                    let ordersArr = Array.isArray(gData.orders) ? gData.orders : [];
+                    let catalogArr = Array.isArray(gData.catalog) ? gData.catalog : [];
+                    let dismissedArr = Array.isArray(gData.dismissedOrderIds) ? gData.dismissedOrderIds.map(String) : [];
+
+                    const estabaEnGlobalOrders = ordersArr.some(o => String(o.id) === String(orderId));
+                    ordersArr = ordersArr.filter(o => String(o.id) !== String(orderId));
+
+                    if (!dismissedArr.includes(String(orderId))) {
+                        dismissedArr.push(String(orderId));
+                    }
+
+                    // Si ya había impactado en datos_globales, devolvemos el stock ahí también
+                    if (estabaEnGlobalOrders) {
+                        catalogArr.forEach(cProd => {
+                            const cId = String(cProd.id || cProd.codigo || cProd.sku);
+                            if (stockADevolver[cId]) {
+                                cProd.stock = (Number(cProd.stock) || 0) + Number(stockADevolver[cId]);
+                            }
+                        });
+                    }
+
+                    promesas.push(globalRef.update({
+                        orders: ordersArr,
+                        catalog: catalogArr,
+                        dismissedOrderIds: dismissedArr
+                    }));
+                }
+
+                await Promise.all(promesas);
+
+                // 3. Quitar de la memoria local del celular
+                DB.pedidosEliminadosIds = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds : [];
+                if (!DB.pedidosEliminadosIds.includes(String(orderId))) {
+                    DB.pedidosEliminadosIds.push(String(orderId));
+                }
+                DB.pedidosSemana = (DB.pedidosSemana || []).filter(p => String(p.id) !== String(orderId));
+                saveDB();
+
+                // Si estaba abierto en el modal o en modo edición de catálogo, limpiar y cerrar
+                if (String(pedidoEditandoModalId) === String(orderId)) {
+                    cerrarModalEditarPedido();
+                }
+                if (String(pedidoEditandoCatalogoId) === String(orderId)) {
+                    cancelarModoEdicionCatalogo();
+                }
+
+                actualizarKpisSemanales();
+                renderMisPedidosCargados();
+                renderCatalogo(document.getElementById('inputBuscarProd').value);
+                actualizarBarraCarrito();
+
+                alert(`🗑️ El pedido de "${nomCli}" fue eliminado y el stock volvió al depósito.`);
+            } catch (err) {
+                console.error('Error al eliminar pedido:', err);
+                alert('❌ Error al intentar eliminar el pedido: ' + (err.message || err));
+            } finally {
+                if (btnModal) {
+                    btnModal.disabled = false;
+                    btnModal.innerHTML = htmlOrigBtn;
+                }
+            }
         }
 
         // --- MODAL DE EDICIÓN EN VIVO DE UN PEDIDO CARGADO ---
@@ -1015,8 +1178,11 @@
 
             if (idsActivos.length === 0) {
                 htmlItems = `
-                    <div class="p-6 text-center text-slate-500 text-xs italic border border-slate-800 rounded-xl">
-                        Quitaste todos los artículos. Usá el buscador de abajo para agregar productos al pedido.
+                    <div class="p-5 text-center text-slate-400 text-xs space-y-2 border border-rose-500/30 bg-rose-950/10 rounded-xl">
+                        <span class="block">Quitaste todos los productos de este pedido.</span>
+                        <button type="button" onclick="confirmarEliminarPedido(pedidoEditandoModalId)" class="bg-rose-500 text-white font-black text-[11px] uppercase px-3 py-1.5 rounded-lg cursor-pointer">
+                            🗑️ Eliminar Pedido Ahora
+                        </button>
                     </div>
                 `;
             }
@@ -1132,7 +1298,6 @@
             cantOriginalEdicionCatalogo = Object.assign({}, cantOriginalEdicionModal);
             carrito = Object.assign({}, carritoEdicionModal);
 
-            // Seleccionar cliente en el dropdown
             const selCli = document.getElementById('selCliente');
             const cliId = (ped.cliente && ped.cliente.id) ? String(ped.cliente.id) : String(ped.clientId || '');
             if (selCli && cliId) {
@@ -1169,7 +1334,7 @@
             if (!pedidoEditandoModalId) return;
             const idsActivos = Object.keys(carritoEdicionModal).filter(id => (Number(carritoEdicionModal[id]) || 0) > 0);
             if (idsActivos.length === 0) {
-                alert('El pedido debe tener al menos 1 producto cargado.');
+                confirmarEliminarPedido(pedidoEditandoModalId);
                 return;
             }
 
@@ -1203,7 +1368,6 @@
             const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
             let itemsPedido = [], subtotalBruto = 0, comisionBruta = 0;
 
-            // 1. Calcular diferencias de stock respecto al pedido original (incluyendo regalos previos y nuevos)
             const regalosOriginales = obtenerRegalosActivosDelCarrito(catalogMap, mapaCantOriginal);
             const regalosNuevos = obtenerRegalosActivosDelCarrito(catalogMap, nuevoMapaCarrito);
 
@@ -1225,7 +1389,6 @@
                 stockDeltaPorProducto[String(r.rewardId)] = (stockDeltaPorProducto[String(r.rewardId)] || 0) + (Number(r.cantidad) || 0);
             });
 
-            // Aplicar diferencia de stock en catálogo local
             Object.keys(stockDeltaPorProducto).forEach(idProd => {
                 const delta = stockDeltaPorProducto[idProd];
                 if (delta !== 0) {
@@ -1236,7 +1399,6 @@
                 }
             });
 
-            // 2. Construir la nueva lista de ítems del pedido
             Object.keys(nuevoMapaCarrito).forEach(id => {
                 const cant = Number(nuevoMapaCarrito[id]) || 0;
                 if (cant > 0) {
@@ -1336,7 +1498,6 @@
                 ultima_edicion: fechaLocal
             })));
 
-            // 3. Sincronizar en Firebase: tanto en colección `pedidos` como en `nexo_erp/datos_globales`
             const snapPedidos = await db.collection('pedidos').where('id', '==', String(orderId)).get();
             const promesas = [];
             snapPedidos.forEach(docSnap => {
@@ -1376,7 +1537,6 @@
 
             await Promise.all(promesas);
 
-            // 4. Actualizar lista local de pedidos
             DB.pedidosSemana = (DB.pedidosSemana || []).map(p => 
                 String(p.id) === String(orderId) ? Object.assign({}, pedidoActualizado, { _localCreatedAt: Date.now() }) : p
             );
@@ -1421,6 +1581,7 @@
             }
 
             DB.clientesLocalesNuevos = Array.isArray(DB.clientesLocalesNuevos) ? DB.clientesLocalesNuevos : [];
+            DB.pedidosEliminadosIds = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds : [];
             saveDB();
 
             if (!esVendedorValidoPreventa(DB.vendedorActivo) || estabaBloqueadoManual) {
@@ -1479,11 +1640,13 @@
             if (Array.isArray(data.orders) && esVendedorValidoPreventa(DB.vendedorActivo)) {
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
-                const descartados = Array.isArray(data.dismissedOrderIds) ? data.dismissedOrderIds.map(String) : [];
+                const descartadosNube = Array.isArray(data.dismissedOrderIds) ? data.dismissedOrderIds.map(String) : [];
+                const eliminadosLocal = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds.map(String) : [];
+                const todosDescartados = new Set([...descartadosNube, ...eliminadosLocal]);
 
                 const pedidosDesdeNube = data.orders.filter(o => {
                     const idStr = String(o.id);
-                    if (descartados.includes(idStr)) return false;
+                    if (todosDescartados.has(idStr)) return false;
 
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
                     if (!vendPed || (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed))) return false;
@@ -1498,7 +1661,7 @@
                 const localesEnTransito = (DB.pedidosSemana || []).filter(pLocal => {
                     const idStr = String(pLocal.id);
                     if (idsEnNube.has(idStr)) return false;
-                    if (descartados.includes(idStr)) return false;
+                    if (todosDescartados.has(idStr)) return false;
                     const creadoHaceMs = ahoraMs - (Number(pLocal._localCreatedAt) || 0);
                     return creadoHaceMs >= 0 && creadoHaceMs < 6000;
                 });
@@ -2649,7 +2812,6 @@
             const obs = (document.getElementById('txtPedidoObservacion')?.value || '').trim();
             const fechaEntrega = document.getElementById('txtPedidoFechaEntrega')?.value || '';
 
-            // Si estamos en modo edición de un pedido existente desde el catálogo principal
             if (pedidoEditandoCatalogoId) {
                 try {
                     await ejecutarActualizacionPedidoExistente(pedidoEditandoCatalogoId, carrito, cantOriginalEdicionCatalogo, fechaEntrega, obs);
@@ -2848,11 +3010,13 @@
 
         function actualizarKpisSemanales() {
             const pedidos = DB.pedidosSemana || [];
+            const eliminadosLocal = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds.map(String) : [];
             let totalVenta = 0, totalComision = 0, cantPedidos = 0;
             const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
             const inicioCiclo = obtenerInicioSemanaComercialActual();
 
             pedidos.forEach(p => {
+                if (eliminadosLocal.includes(String(p.id))) return;
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
                 const fechaObj = parseFechaPedido(p.fecha || p.date);
                 if ((vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) && fechaObj >= inicioCiclo) {
