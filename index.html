@@ -149,12 +149,12 @@
                 </div>
             </div>
 
-            <!-- MIS PEDIDOS CARGADOS (VER, EDITAR Y ELIMINAR PEDIDOS DE CLIENTES) -->
+            <!-- MIS PEDIDOS PENDIENTES DE REPARTO (SE OCULTAN AUTOMÁTICAMENTE AL ARMAR LA CARGA) -->
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
                 <div class="flex items-center justify-between cursor-pointer" onclick="toggleAcordeonMisPedidos()">
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-                            <i class="fa-solid fa-clipboard-list"></i> MIS PEDIDOS CARGADOS
+                            <i class="fa-solid fa-clipboard-list"></i> MIS PEDIDOS CARGADOS (PENDIENTES)
                         </span>
                         <span id="badgeCantMisPedidosList" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">0</span>
                     </div>
@@ -170,7 +170,7 @@
                         <input 
                             type="text" 
                             id="inputBuscarPedidoCargado" 
-                            placeholder="Filtrar pedido por nombre de cliente..." 
+                            placeholder="Filtrar pedido pendiente por cliente..." 
                             oninput="renderMisPedidosCargados()"
                             class="input-mobile w-full pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none"
                         >
@@ -264,7 +264,7 @@
             <div class="flex justify-between items-start border-b border-slate-800 pb-2.5">
                 <div>
                     <span class="text-[10px] font-black uppercase text-cyan-400 flex items-center gap-1">
-                        <i class="fa-solid fa-pen-to-square"></i> Pedido Cargado • Edición en Vivo
+                        <i class="fa-solid fa-pen-to-square"></i> Pedido Pendiente • Edición en Vivo
                     </span>
                     <h3 id="editModalClienteNombre" class="text-sm font-black uppercase text-white mt-0.5">-</h3>
                     <span id="editModalClienteFecha" class="text-[10px] text-slate-400 block">-</span>
@@ -463,6 +463,7 @@
             clientesLocalesNuevos: [],
             vendedores: ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'],
             pedidosSemana: [],
+            pedidosDespachadosIds: [],
             pedidosEliminadosIds: []
         };
 
@@ -560,6 +561,19 @@
             }
             const d = parseFechaPedido(fechaStr);
             return d.toLocaleDateString('es-AR');
+        }
+
+        // --- DETECTA SI UN PEDIDO YA FUE ARMADO EN UNA CARGA O SALIÓ A REPARTO ---
+        function esPedidoYaDespachado(ped) {
+            if (!ped) return false;
+            const idStr = String(ped.id || '');
+            const listaDesp = Array.isArray(DB.pedidosDespachadosIds) ? DB.pedidosDespachadosIds.map(String) : [];
+            if (listaDesp.includes(idStr)) return true;
+            if (ped.despachado === true || ped.enReparto === true || ped._despachado === true) return true;
+            if (ped.cargaId || ped.loteId) return true;
+            const st = String(ped.status || '').toLowerCase().trim();
+            if (st === 'en_carga' || st === 'rendido' || st === 'despachado' || st === 'entregado') return true;
+            return false;
         }
 
         // --- PUNTO 5: LECTOR DE ESCALERA DE PREMIOS POR FACTURACIÓN TOTAL ---
@@ -800,6 +814,7 @@
         function obtenerNombreClienteDePedido(ped) {
             if (!ped) return 'Cliente';
             if (ped.cliente && (ped.cliente.nombre || ped.cliente.name)) return String(ped.cliente.nombre || ped.cliente.name);
+            if (ped.client) return String(ped.client);
             if (ped.clientName) return String(ped.clientName);
             if (ped.clienteNombre) return String(ped.clienteNombre);
             return 'Cliente';
@@ -821,7 +836,7 @@
             ped.items.forEach(it => {
                 const idProd = String(it.id_producto || it.productId || it.id || '');
                 const desc = String(it.descripcion || it.name || '');
-                const precio = Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price);
+                const precio = Number(it.precio_unitario !== undefined ? it.precio_unitario : (it.unitPVP !== undefined ? it.unitPVP : it.price));
                 const cant = Number(it.cantidad !== undefined ? it.cantidad : it.qty) || 0;
 
                 if (idProd === 'PROMO_TICKET_DESCUENTO' || precio < 0) return;
@@ -842,7 +857,6 @@
             return mapa;
         }
 
-        // Extrae absolutamente todas las unidades físicas descontadas por el pedido (incluyendo regalos $0)
         function extraerTodoElStockFisicoDePedido(ped) {
             const mapaStock = {};
             if (!ped || !Array.isArray(ped.items)) return mapaStock;
@@ -851,7 +865,7 @@
             ped.items.forEach(it => {
                 const idProd = String(it.id_producto || it.productId || it.id || '');
                 const desc = String(it.descripcion || it.name || '');
-                const precio = Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price);
+                const precio = Number(it.precio_unitario !== undefined ? it.precio_unitario : (it.unitPVP !== undefined ? it.unitPVP : it.price));
                 const cant = Number(it.cantidad !== undefined ? it.cantidad : it.qty) || 0;
 
                 if (idProd === 'PROMO_TICKET_DESCUENTO' || precio < 0 || cant <= 0) return;
@@ -883,6 +897,7 @@
             }
         }
 
+        // --- RENDERIZA ÚNICAMENTE LOS PEDIDOS PENDIENTES DE SALIR (OCULTA LOS QUE YA ESTÁN EN CARGA O REPARTO) ---
         function renderMisPedidosCargados() {
             const cont = document.getElementById('listaMisPedidosContenedor');
             const badge = document.getElementById('badgeCantMisPedidosList');
@@ -893,16 +908,19 @@
             const q = (document.getElementById('inputBuscarPedidoCargado')?.value || '').trim().toLowerCase();
             const eliminadosLocal = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds.map(String) : [];
 
-            const misPedidos = (DB.pedidosSemana || []).filter(p => {
+            const misPedidosPendientes = (DB.pedidosSemana || []).filter(p => {
                 if (eliminadosLocal.includes(String(p.id))) return false;
+                // Si el pedido ya entró en una Carga Armada o ya fue rendido, no mostrarlo acá
+                if (esPedidoYaDespachado(p)) return false;
+
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
                 const fechaObj = parseFechaPedido(p.fecha || p.date);
                 return (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) && fechaObj >= inicioCiclo;
             });
 
-            if (badge) badge.textContent = misPedidos.length;
+            if (badge) badge.textContent = misPedidosPendientes.length;
 
-            const filtrados = misPedidos.filter(p => {
+            const filtrados = misPedidosPendientes.filter(p => {
                 if (!q) return true;
                 const nomCli = obtenerNombreClienteDePedido(p).toLowerCase();
                 return nomCli.includes(q);
@@ -913,7 +931,7 @@
             if (filtrados.length === 0) {
                 cont.innerHTML = `
                     <div class="p-4 text-center text-slate-500 text-xs italic bg-slate-950/60 rounded-xl border border-slate-800/80">
-                        ${misPedidos.length === 0 ? 'Todavía no cargaste pedidos en esta semana.' : 'No se encontraron pedidos de ese cliente.'}
+                        ${misPedidosPendientes.length === 0 ? 'No tenés pedidos pendientes en depósito (los que ya salieron a reparto se limpian automáticamente).' : 'No se encontraron pedidos pendientes de ese cliente.'}
                     </div>
                 `;
                 return;
@@ -967,6 +985,12 @@
                 alert('No se encontró el pedido para eliminar.');
                 return;
             }
+            if (esPedidoYaDespachado(ped)) {
+                alert('⚠️ Este pedido ya fue asignado a una Carga de Reparto en el ERP y no puede eliminarse desde el celular.');
+                cerrarModalEditarPedido();
+                renderMisPedidosCargados();
+                return;
+            }
 
             const nomCli = obtenerNombreClienteDePedido(ped);
             const total = Number(ped.total_venta !== undefined ? ped.total_venta : ped.total) || 0;
@@ -982,10 +1006,8 @@
             }
 
             try {
-                // 1. Calcular todo el stock físico que había descontado este pedido para devolverlo
                 const stockADevolver = extraerTodoElStockFisicoDePedido(ped);
 
-                // Devolver stock en el catálogo local del celular
                 Object.keys(stockADevolver).forEach(idProd => {
                     const cantDev = Number(stockADevolver[idProd]) || 0;
                     if (cantDev > 0) {
@@ -996,7 +1018,6 @@
                     }
                 });
 
-                // 2. Eliminar de Firebase (colección `pedidos` y documento `nexo_erp/datos_globales`)
                 const promesas = [];
 
                 const snapPedidos = await db.collection('pedidos').where('id', '==', String(orderId)).get();
@@ -1019,7 +1040,6 @@
                         dismissedArr.push(String(orderId));
                     }
 
-                    // Si ya había impactado en datos_globales, devolvemos el stock ahí también
                     if (estabaEnGlobalOrders) {
                         catalogArr.forEach(cProd => {
                             const cId = String(cProd.id || cProd.codigo || cProd.sku);
@@ -1038,7 +1058,6 @@
 
                 await Promise.all(promesas);
 
-                // 3. Quitar de la memoria local del celular
                 DB.pedidosEliminadosIds = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds : [];
                 if (!DB.pedidosEliminadosIds.includes(String(orderId))) {
                     DB.pedidosEliminadosIds.push(String(orderId));
@@ -1046,7 +1065,6 @@
                 DB.pedidosSemana = (DB.pedidosSemana || []).filter(p => String(p.id) !== String(orderId));
                 saveDB();
 
-                // Si estaba abierto en el modal o en modo edición de catálogo, limpiar y cerrar
                 if (String(pedidoEditandoModalId) === String(orderId)) {
                     cerrarModalEditarPedido();
                 }
@@ -1076,6 +1094,11 @@
             const ped = (DB.pedidosSemana || []).find(p => String(p.id) === String(pedidoId));
             if (!ped) {
                 alert('No se encontró el pedido.');
+                return;
+            }
+            if (esPedidoYaDespachado(ped)) {
+                alert('🚚 Este pedido ya entró en una Carga de Reparto y salió del listado de pendientes.');
+                renderMisPedidosCargados();
                 return;
             }
 
@@ -1364,6 +1387,9 @@
         async function ejecutarActualizacionPedidoExistente(orderId, nuevoMapaCarrito, mapaCantOriginal, nuevaFechaEntrega, nuevaObs) {
             const pedOriginal = (DB.pedidosSemana || []).find(p => String(p.id) === String(orderId));
             if (!pedOriginal) throw new Error('No se encontró el pedido original.');
+            if (esPedidoYaDespachado(pedOriginal)) {
+                throw new Error('Este pedido ya fue asignado a una Carga de Reparto y no puede modificarse.');
+            }
 
             const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
             let itemsPedido = [], subtotalBruto = 0, comisionBruta = 0;
@@ -1420,10 +1446,12 @@
                         descripcion: nombreFinal,
                         qty: cant,
                         cantidad: cant,
+                        unitPVP: calc.pvpUnitario,
                         price: calc.pvpUnitario,
                         precio_unitario: calc.pvpUnitario,
                         subtotal: calc.subtotal,
                         total: calc.subtotal,
+                        sellerAmt: calc.comisionTotal,
                         commission: calc.comisionTotal,
                         comision: calc.comisionTotal,
                         comision_pct_aplicado: calc.comisionEfectivaPct || 0,
@@ -1446,10 +1474,12 @@
                     descripcion: descRegalo,
                     qty: cantReg,
                     cantidad: cantReg,
+                    unitPVP: 0,
                     price: 0,
                     precio_unitario: 0,
                     subtotal: 0,
                     total: 0,
+                    sellerAmt: 0,
                     commission: 0,
                     comision: 0,
                     descuento_pct: 100
@@ -1467,10 +1497,12 @@
                     descripcion: descTicket,
                     qty: 1,
                     cantidad: 1,
+                    unitPVP: -evalTicket.descuentoMonto,
                     price: -evalTicket.descuentoMonto,
                     precio_unitario: -evalTicket.descuentoMonto,
                     subtotal: -evalTicket.descuentoMonto,
                     total: -evalTicket.descuentoMonto,
+                    sellerAmt: -evalTicket.comisionDescuento,
                     commission: -evalTicket.comisionDescuento,
                     comision: -evalTicket.comisionDescuento,
                     descuento_pct: evalTicket.discPct
@@ -1482,6 +1514,9 @@
 
             const pedidoActualizado = JSON.parse(JSON.stringify(Object.assign({}, pedOriginal, {
                 id: String(orderId),
+                status: 'preparacion',
+                despachado: false,
+                enReparto: false,
                 fecha_entrega: String(nuevaFechaEntrega || pedOriginal.fecha_entrega || ''),
                 deliveryDate: String(nuevaFechaEntrega || pedOriginal.deliveryDate || ''),
                 items: itemsPedido,
@@ -1581,6 +1616,7 @@
             }
 
             DB.clientesLocalesNuevos = Array.isArray(DB.clientesLocalesNuevos) ? DB.clientesLocalesNuevos : [];
+            DB.pedidosDespachadosIds = Array.isArray(DB.pedidosDespachadosIds) ? DB.pedidosDespachadosIds : [];
             DB.pedidosEliminadosIds = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds : [];
             saveDB();
 
@@ -1636,37 +1672,118 @@
             );
             DB.clientesLocalesNuevos = localesPendientes;
             DB.clientes = [...clientesNube, ...localesPendientes];
+
+            // 1. Recolectar todos los IDs de pedidos que ya entraron en Cargas Armadas o fueron rendidos en Caja (sales)
+            const setIdsDespachados = new Set();
+            const mapaPedidosDespachadosExtra = {};
+
+            if (Array.isArray(data.cargas)) {
+                data.cargas.forEach(c => {
+                    (c.pedidos || []).forEach(p => {
+                        const pid = String(p.id || '');
+                        if (pid) {
+                            setIdsDespachados.add(pid);
+                            mapaPedidosDespachadosExtra[pid] = Object.assign({}, p, { status: 'en_carga', despachado: true, _despachado: true });
+                        }
+                    });
+                });
+            }
+
+            if (Array.isArray(data.sales)) {
+                data.sales.forEach(s => {
+                    const sid = String(s.orderId || s.id || '');
+                    if (sid) {
+                        setIdsDespachados.add(sid);
+                        if (!mapaPedidosDespachadosExtra[sid]) {
+                            mapaPedidosDespachadosExtra[sid] = Object.assign({}, s, { id: sid, status: 'rendido', despachado: true, _despachado: true });
+                        }
+                    }
+                });
+            }
+
+            if (Array.isArray(data.orders)) {
+                data.orders.forEach(o => {
+                    const oid = String(o.id || '');
+                    const st = String(o.status || '').toLowerCase().trim();
+                    if (o.despachado === true || o.enReparto === true || o.cargaId || st === 'en_carga' || st === 'rendido') {
+                        setIdsDespachados.add(oid);
+                    }
+                });
+            }
+
+            DB.pedidosDespachadosIds = Array.from(setIdsDespachados);
             
-            if (Array.isArray(data.orders) && esVendedorValidoPreventa(DB.vendedorActivo)) {
+            if (esVendedorValidoPreventa(DB.vendedorActivo)) {
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
                 const descartadosNube = Array.isArray(data.dismissedOrderIds) ? data.dismissedOrderIds.map(String) : [];
                 const eliminadosLocal = Array.isArray(DB.pedidosEliminadosIds) ? DB.pedidosEliminadosIds.map(String) : [];
                 const todosDescartados = new Set([...descartadosNube, ...eliminadosLocal]);
 
-                const pedidosDesdeNube = data.orders.filter(o => {
+                const mapaUnificadoSemana = {};
+
+                // A. Pedidos en data.orders
+                (data.orders || []).forEach(o => {
                     const idStr = String(o.id);
-                    if (todosDescartados.has(idStr)) return false;
-
+                    if (todosDescartados.has(idStr)) return;
                     const vendPed = (o.seller || o.vendedor || '').toLowerCase().trim();
-                    if (!vendPed || (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed))) return false;
-
+                    if (!vendPed || (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed))) return;
                     const fechaObj = parseFechaPedido(o.fecha || o.date);
-                    return fechaObj >= inicioCiclo;
+                    if (fechaObj >= inicioCiclo) {
+                        const yaDesp = setIdsDespachados.has(idStr) || esPedidoYaDespachado(o);
+                        mapaUnificadoSemana[idStr] = Object.assign({}, o, {
+                            despachado: yaDesp,
+                            _despachado: yaDesp
+                        });
+                    }
                 });
 
-                const idsEnNube = new Set(pedidosDesdeNube.map(o => String(o.id)));
+                // B. Pedidos que ya pasaron a Cargas Armadas o Cierre de Caja (suman al KPI semanal, pero quedan marcados como despachados)
+                Object.keys(mapaPedidosDespachadosExtra).forEach(idStr => {
+                    if (todosDescartados.has(idStr)) return;
+                    if (mapaUnificadoSemana[idStr]) {
+                        mapaUnificadoSemana[idStr].despachado = true;
+                        mapaUnificadoSemana[idStr]._despachado = true;
+                        return;
+                    }
+                    const pExtra = mapaPedidosDespachadosExtra[idStr];
+                    const vendPed = (pExtra.seller || pExtra.vendedor || '').toLowerCase().trim();
+                    if (!vendPed || (!vendPed.includes(vendedorActual) && !vendedorActual.includes(vendPed))) return;
+                    const fechaObj = parseFechaPedido(pExtra.fecha || pExtra.date);
+                    if (fechaObj >= inicioCiclo) {
+                        mapaUnificadoSemana[idStr] = Object.assign({}, pExtra, {
+                            despachado: true,
+                            _despachado: true
+                        });
+                    }
+                });
+
+                // C. Pedidos recién creados en el celular en tránsito a Firebase
                 const ahoraMs = Date.now();
-
-                const localesEnTransito = (DB.pedidosSemana || []).filter(pLocal => {
+                (DB.pedidosSemana || []).forEach(pLocal => {
                     const idStr = String(pLocal.id);
-                    if (idsEnNube.has(idStr)) return false;
-                    if (todosDescartados.has(idStr)) return false;
-                    const creadoHaceMs = ahoraMs - (Number(pLocal._localCreatedAt) || 0);
-                    return creadoHaceMs >= 0 && creadoHaceMs < 6000;
+                    if (todosDescartados.has(idStr)) return;
+                    if (setIdsDespachados.has(idStr)) {
+                        pLocal.despachado = true;
+                        pLocal._despachado = true;
+                    }
+                    if (!mapaUnificadoSemana[idStr]) {
+                        const creadoHaceMs = ahoraMs - (Number(pLocal._localCreatedAt) || 0);
+                        if (creadoHaceMs >= 0 && creadoHaceMs < 15000) {
+                            mapaUnificadoSemana[idStr] = pLocal;
+                        }
+                    }
                 });
 
-                DB.pedidosSemana = [...pedidosDesdeNube, ...localesEnTransito];
+                DB.pedidosSemana = Object.values(mapaUnificadoSemana);
+
+                // Si el vendedor tenía abierto el modal de un pedido que acaba de entrar en reparto, cerrarlo
+                if (pedidoEditandoModalId && setIdsDespachados.has(String(pedidoEditandoModalId))) {
+                    cerrarModalEditarPedido();
+                }
+                if (pedidoEditandoCatalogoId && setIdsDespachados.has(String(pedidoEditandoCatalogoId))) {
+                    cancelarModoEdicionCatalogo();
+                }
             }
 
             saveDB();
@@ -2874,10 +2991,12 @@
                         descripcion: nombreFinal,
                         qty: cant,
                         cantidad: cant,
+                        unitPVP: calc.pvpUnitario,
                         price: calc.pvpUnitario,
                         precio_unitario: calc.pvpUnitario,
                         subtotal: calc.subtotal,
                         total: calc.subtotal,
+                        sellerAmt: calc.comisionTotal,
                         commission: calc.comisionTotal,
                         comision: calc.comisionTotal,
                         comision_pct_aplicado: calc.comisionEfectivaPct || 0,
@@ -2911,10 +3030,12 @@
                     descripcion: descRegalo,
                     qty: cantReg,
                     cantidad: cantReg,
+                    unitPVP: 0,
                     price: 0,
                     precio_unitario: 0,
                     subtotal: 0,
                     total: 0,
+                    sellerAmt: 0,
                     commission: 0,
                     comision: 0,
                     descuento_pct: 100
@@ -2937,10 +3058,12 @@
                     descripcion: descTicket,
                     qty: 1,
                     cantidad: 1,
+                    unitPVP: -evalTicket.descuentoMonto,
                     price: -evalTicket.descuentoMonto,
                     precio_unitario: -evalTicket.descuentoMonto,
                     subtotal: -evalTicket.descuentoMonto,
                     total: -evalTicket.descuentoMonto,
+                    sellerAmt: -evalTicket.comisionDescuento,
                     commission: -evalTicket.comisionDescuento,
                     comision: -evalTicket.comisionDescuento,
                     descuento_pct: evalTicket.discPct
@@ -2961,12 +3084,16 @@
                 date: String(fechaLocal || ''),
                 fecha_entrega: String(fechaEntrega || ''),
                 deliveryDate: String(fechaEntrega || ''),
+                status: 'preparacion',
+                despachado: false,
+                enReparto: false,
                 cliente: {
                     id: String(clienteId || Date.now()),
                     nombre: String(nombreCliente || 'Cliente'),
                     direccion: String(addrLimpia || ''),
                     telefono: String(telCliente || '')
                 },
+                client: String(nombreCliente || 'Cliente'),
                 clientId: String(clienteId || Date.now()),
                 clientName: String(nombreCliente || 'Cliente'),
                 clientAddr: String(addrLimpia || ''),
