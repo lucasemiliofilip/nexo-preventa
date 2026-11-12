@@ -23,7 +23,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased pb-28">
 
     <div id="appPrincipalWrapper" class="flex-1 flex flex-col">
-        <!-- PANTALLA DE LOGIN CON PIN -->
+        <!-- PANTALLA DE LOGIN CON PIN Y VINCULACIÓN DE DISPOSITIVO -->
         <div id="pantallaLogin" class="fixed inset-0 bg-slate-950 z-50 flex items-center justify-center p-5">
             <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-center">
                 <div class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-3xl font-black shadow-lg">
@@ -35,9 +35,17 @@
                 </div>
                 <div class="space-y-3.5 text-left">
                     <div>
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">Vendedor:</label>
-                        <select id="loginVendedorSelect" class="input-mobile w-full px-3.5 py-3 text-xs font-bold text-emerald-400 outline-none cursor-pointer">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-[10px] font-bold text-slate-400 uppercase">Vendedor:</label>
+                            <span id="badgeVendedorFijo" class="hidden text-[9px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                                <i class="fa-solid fa-mobile-screen-button"></i> Vinculado a este celular
+                            </span>
+                        </div>
+                        <select id="loginVendedorSelect" class="input-mobile w-full px-3.5 py-3 text-xs font-bold text-emerald-400 outline-none cursor-pointer disabled:opacity-80 disabled:cursor-not-allowed">
                         </select>
+                        <button type="button" id="btnDesbloquearVendedorAdmin" onclick="desbloquearVendedorDispositivoAdmin()" class="hidden mt-1.5 text-[10px] text-slate-500 hover:text-amber-400 font-semibold underline cursor-pointer w-full text-right">
+                            🔓 Cambiar vendedor asignado (Solo Admin)
+                        </button>
                     </div>
                     <div>
                         <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">PIN / Contraseña:</label>
@@ -68,7 +76,7 @@
                     <div>
                         <h1 class="text-sm font-extrabold text-white leading-tight">Nexo Preventa</h1>
                         <div class="flex items-center gap-2 mt-1 flex-wrap">
-                            <div class="flex items-center gap-1 cursor-pointer hover:text-white transition" onclick="bloquearSesion()" title="Bloquear Sesión">
+                            <div class="flex items-center gap-1 cursor-pointer hover:text-white transition" onclick="bloquearSesion()" title="Bloquear Pantalla">
                                 <span id="txtNombreVendedor" class="text-xs text-emerald-400 font-bold">-</span>
                                 <i class="fa-solid fa-lock text-[10px] text-slate-400"></i>
                             </div>
@@ -282,7 +290,9 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
+        // LLAVE ESTABLE DE DATOS Y LLAVE PERPETUA DE VENDEDOR VINCULADO AL CELULAR
         const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v32';
+        const STORAGE_KEY_VENDEDOR_FIJO = 'nexo_vendedor_fijo_celular_permanente';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
@@ -301,6 +311,23 @@
 
         let carrito = {};
         let soloPromosActivas = false;
+
+        function esVendedorValidoPreventa(nombre) {
+            if (!nombre) return false;
+            const limpio = String(nombre).trim().toLowerCase();
+            return limpio.length > 0 && limpio !== 'mostrador';
+        }
+
+        function obtenerVendedorFijoDispositivo() {
+            const fijo = localStorage.getItem(STORAGE_KEY_VENDEDOR_FIJO);
+            return esVendedorValidoPreventa(fijo) ? fijo.trim() : '';
+        }
+
+        function fijarVendedorEnDispositivo(nombre) {
+            if (esVendedorValidoPreventa(nombre)) {
+                localStorage.setItem(STORAGE_KEY_VENDEDOR_FIJO, nombre.trim());
+            }
+        }
 
         function fmtMoneda(num) {
             return '$ ' + Math.round(Number(num) || 0).toLocaleString('es-AR');
@@ -351,16 +378,39 @@
 
         function initApp() {
             try {
-                const raw = localStorage.getItem(STORAGE_KEY_PREVENTA);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
+                // Rescata datos de versión actual o versión inmediata anterior sin desloguear
+                const rawCurrent = localStorage.getItem(STORAGE_KEY_PREVENTA) || localStorage.getItem('nexo_preventa_stock_v31');
+                if (rawCurrent) {
+                    const parsed = JSON.parse(rawCurrent);
                     DB = Object.assign(DB, parsed);
                 }
             } catch (e) {}
 
+            // Si había quedado logueado como "Mostrador", lo limpia inmediatamente
+            if (!esVendedorValidoPreventa(DB.vendedorActivo)) {
+                DB.vendedorActivo = '';
+            }
+
+            // Si ya tenía un vendedor válido o un vendedor fijo en el dispositivo, lo mantiene siempre activo
+            const vendedorFijo = obtenerVendedorFijoDispositivo();
+            if (vendedorFijo) {
+                if (DB.vendedorActivo !== 'BLOQUEADO_MANUAL') {
+                    DB.vendedorActivo = vendedorFijo;
+                }
+            } else if (esVendedorValidoPreventa(DB.vendedorActivo)) {
+                fijarVendedorEnDispositivo(DB.vendedorActivo);
+            }
+
+            DB.vendedores = (DB.vendedores || []).filter(esVendedorValidoPreventa);
+            if (DB.vendedores.length === 0) {
+                DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+            }
+
             DB.clientesLocalesNuevos = Array.isArray(DB.clientesLocalesNuevos) ? DB.clientesLocalesNuevos : [];
-            
-            if (!DB.vendedorActivo) {
+            saveDB();
+
+            if (!esVendedorValidoPreventa(DB.vendedorActivo) || DB.vendedorActivo === 'BLOQUEADO_MANUAL') {
+                DB.vendedorActivo = '';
                 mostrarPantallaLogin();
             } else {
                 ocultarPantallaLogin();
@@ -395,11 +445,14 @@
             if (data.bizConfig) DB.bizConfig = data.bizConfig;
             DB.catalogo = Array.isArray(data.catalog) ? data.catalog : [];
             
-            // SINCRONIZACIÓN DINÁMICA DE VENDEDORES DESDE EL ERP
+            // SINCRONIZACIÓN DINÁMICA DE VENDEDORES DESDE EL ERP (EXCLUYENDO MOSTRADOR)
             if (Array.isArray(data.sellers) && data.sellers.length > 0) {
-                DB.vendedores = data.sellers.map(s => s.name);
-            } else {
-                DB.vendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+                const filtrados = data.sellers
+                    .map(s => String(s.name || '').trim())
+                    .filter(esVendedorValidoPreventa);
+                if (filtrados.length > 0) {
+                    DB.vendedores = filtrados;
+                }
             }
             
             const clientesNube = Array.isArray(data.clients) ? data.clients : [];
@@ -409,7 +462,7 @@
             DB.clientesLocalesNuevos = localesPendientes;
             DB.clientes = [...clientesNube, ...localesPendientes];
             
-            if (Array.isArray(data.orders) && DB.vendedorActivo) {
+            if (Array.isArray(data.orders) && esVendedorValidoPreventa(DB.vendedorActivo)) {
                 const vendedorActual = DB.vendedorActivo.toLowerCase().trim();
                 const inicioCiclo = obtenerInicioSemanaComercialActual();
                 const descartados = Array.isArray(data.dismissedOrderIds) ? data.dismissedOrderIds.map(String) : [];
@@ -441,7 +494,7 @@
 
             saveDB();
             
-            if (DB.vendedorActivo) {
+            if (esVendedorValidoPreventa(DB.vendedorActivo)) {
                 actualizarDropdownClientes();
                 actualizarKpisSemanales();
                 renderCatalogo(document.getElementById('inputBuscarProd').value);
@@ -684,20 +737,54 @@
             alert('¡Contraseña actualizada con éxito!');
         }
 
+        // --- LOGIN CON CANDADO DE VENDEDOR ÚNICO POR DISPOSITIVO ---
         function mostrarPantallaLogin() {
             const loginModal = document.getElementById('pantallaLogin');
             const sel = document.getElementById('loginVendedorSelect');
             const pinInput = document.getElementById('loginPinInput');
+            const badgeFijo = document.getElementById('badgeVendedorFijo');
+            const btnDesbloquear = document.getElementById('btnDesbloquearVendedorAdmin');
+
+            const vendedorFijo = obtenerVendedorFijoDispositivo();
 
             if (sel) {
-                let listaVendedores = DB.vendedores && DB.vendedores.length > 0 ? DB.vendedores : ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
-                sel.innerHTML = listaVendedores.map(v => `<option value="${v}">${v}</option>`).join('');
-                if (DB.vendedorActivo && listaVendedores.includes(DB.vendedorActivo)) {
-                    sel.value = DB.vendedorActivo;
+                let listaVendedores = (DB.vendedores || []).filter(esVendedorValidoPreventa);
+                if (listaVendedores.length === 0) {
+                    listaVendedores = ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'];
+                }
+
+                if (vendedorFijo) {
+                    // El celular ya tiene un vendedor asignado: bloqueamos el selector en su nombre
+                    sel.innerHTML = `<option value="${vendedorFijo}" selected>${vendedorFijo}</option>`;
+                    sel.value = vendedorFijo;
+                    sel.disabled = true;
+                    if (badgeFijo) badgeFijo.classList.remove('hidden');
+                    if (btnDesbloquear) btnDesbloquear.classList.remove('hidden');
+                } else {
+                    // Primera vez en este celular: obliga a desplegar y elegir nombre (sin preseleccionar el primero)
+                    sel.innerHTML = '<option value="" disabled selected hidden>-- Seleccioná tu nombre --</option>' +
+                        listaVendedores.map(v => `<option value="${v}">${v}</option>`).join('');
+                    sel.disabled = false;
+                    if (badgeFijo) badgeFijo.classList.add('hidden');
+                    if (btnDesbloquear) btnDesbloquear.classList.add('hidden');
                 }
             }
             if (pinInput) pinInput.value = '';
             if (loginModal) loginModal.classList.remove('hidden');
+        }
+
+        function desbloquearVendedorDispositivoAdmin() {
+            const clave = prompt('🔑 Ingresá la clave de Administrador para cambiar el vendedor asignado a este celular:');
+            if (!clave) return;
+            if (clave.trim().toLowerCase() === 'admin' || clave.trim() === '4321') {
+                localStorage.removeItem(STORAGE_KEY_VENDEDOR_FIJO);
+                DB.vendedorActivo = '';
+                saveDB();
+                mostrarPantallaLogin();
+                alert('✅ Dispositivo liberado. Ahora podés seleccionar el nuevo vendedor para este celular.');
+            } else {
+                alert('⛔ Clave de Administrador incorrecta.');
+            }
         }
 
         function ocultarPantallaLogin() {
@@ -707,10 +794,14 @@
         function ingresarPreventa() {
             const sel = document.getElementById('loginVendedorSelect');
             const pinInput = document.getElementById('loginPinInput');
-            const vendedorElegido = sel ? sel.value : '';
+            const vendedorFijo = obtenerVendedorFijoDispositivo();
+            const vendedorElegido = vendedorFijo || (sel ? sel.value : '');
             const pinIngresado = pinInput ? pinInput.value.trim() : '';
 
-            if (!vendedorElegido) { alert('Elegí un vendedor.'); return; }
+            if (!esVendedorValidoPreventa(vendedorElegido)) {
+                alert('Por favor, seleccioná tu nombre de vendedor en la lista.');
+                return;
+            }
 
             const pinEsperado = (DB.vendedoresPins && DB.vendedoresPins[vendedorElegido]) || '1234';
             if (pinIngresado !== pinEsperado && pinIngresado !== '1234') {
@@ -719,6 +810,8 @@
                 return;
             }
 
+            // Vincula permanentemente este celular al vendedor elegido
+            fijarVendedorEnDispositivo(vendedorElegido);
             DB.vendedorActivo = vendedorElegido;
             saveDB();
 
@@ -732,8 +825,8 @@
         }
 
         function bloquearSesion() {
-            if (confirm('¿Cerrar sesión y bloquear pantalla?')) {
-                DB.vendedorActivo = '';
+            if (confirm('¿Bloquear pantalla con PIN? (Tu usuario seguirá vinculado a este celular)')) {
+                DB.vendedorActivo = 'BLOQUEADO_MANUAL';
                 saveDB();
                 mostrarPantallaLogin();
             }
@@ -741,7 +834,7 @@
 
         function actualizarHeaderVendedor() {
             const el = document.getElementById('txtNombreVendedor');
-            if (el) el.textContent = DB.vendedorActivo || 'Elegir Vendedor';
+            if (el) el.textContent = esVendedorValidoPreventa(DB.vendedorActivo) ? DB.vendedorActivo : 'Elegir Vendedor';
         }
 
         function actualizarDropdownClientes() {
@@ -787,7 +880,7 @@
             const direccion = prompt('Dirección de entrega:') || '';
             const telefono = prompt('Teléfono de contacto:') || '';
 
-            const vendedorAsignado = DB.vendedorActivo || 'Mostrador';
+            const vendedorAsignado = obtenerVendedorFijoDispositivo() || DB.vendedorActivo;
             const addrWithSeller = direccion.trim() + (vendedorAsignado ? ` ||| ${vendedorAsignado}` : '');
             const nuevoId = String(Date.now());
 
@@ -987,6 +1080,13 @@
                 return;
             }
 
+            const vendedorVerificado = obtenerVendedorFijoDispositivo() || DB.vendedorActivo;
+            if (!esVendedorValidoPreventa(vendedorVerificado)) {
+                alert('Sesión inválida. Por favor elegí tu nombre de vendedor.');
+                mostrarPantallaLogin();
+                return;
+            }
+
             const cliente = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
             const nombreFallback = document.getElementById('resumenModalClienteNombre')?.textContent || 'Cliente General';
             const dirFallback = document.getElementById('resumenModalClienteDir')?.textContent || '';
@@ -1045,7 +1145,7 @@
                     direccion: String(addrLimpia || ''),
                     telefono: String(telCliente || '')
                 },
-                vendedor: String(DB.vendedorActivo || 'Mostrador'),
+                vendedor: String(vendedorVerificado),
                 items: itemsPedido,
                 total_venta: Number(totalPedido) || 0,
                 comision_vendedor: Number(comisionPedido) || 0,
