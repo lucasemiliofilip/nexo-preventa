@@ -230,7 +230,7 @@
             </div>
             <div class="space-y-1.5">
                 <span class="text-[10px] font-extrabold uppercase text-slate-400 block">Artículos a despachar</span>
-                <div id="resumenModalItemsList" class="space-y-1.5 max-h-40 overflow-y-auto pr-1"></div>
+                <div id="resumenModalItemsList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
             </div>
             <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
                 <span class="text-xs font-bold text-slate-300">TOTAL PEDIDO:</span>
@@ -386,7 +386,7 @@
             return isNaN(d.getTime()) ? new Date() : d;
         }
 
-        // --- LECTOR DE PRODUCTO Y REGLAS (VOLUMEN + MIX CRUZADO + COMBO MULTI-ARTÍCULO) ---
+        // --- LECTOR DE PRODUCTO Y REGLAS (VOLUMEN + MIX + COMBO + REGALOS $0) ---
         function obtenerDatosProducto(p) {
             const id = String(p.id || p.codigo || p.sku || Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
@@ -411,9 +411,17 @@
             const comboMemberIds = Array.isArray(p.comboMemberIds) ? p.comboMemberIds.map(String) : [];
             const comboMemberNames = Array.isArray(p.comboMemberNames) ? p.comboMemberNames : [];
 
-            const isFeatured = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive || comboPromoActive);
+            const giftPromoActive = Boolean(p.giftPromoActive && p.giftRewardId && Number(p.giftTriggerQty) > 0 && Number(p.giftRewardQty) > 0);
+            const giftTriggerQty = Math.max(1, Number(p.giftTriggerQty) || 1);
+            const giftRewardId = p.giftRewardId ? String(p.giftRewardId) : '';
+            const giftRewardName = p.giftRewardName || 'Artículo de Regalo';
+            const giftRewardQty = Math.max(1, Number(p.giftRewardQty) || 1);
+
+            const isFeatured = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive || comboPromoActive || giftPromoActive);
             let promoText = isFeatured ? String(p.promoText || '').trim() : '';
-            if (comboPromoActive && !promoText) {
+            if (giftPromoActive && !promoText) {
+                promoText = `🎁 Llevando cada ${giftTriggerQty} u. ➔ +${giftRewardQty} de ${giftRewardName} SIN CARGO ($0)`;
+            } else if (comboPromoActive && !promoText) {
                 promoText = `📦 ${comboName}: Pack ${comboMemberIds.length} art. ➔ -${comboDiscPct}% OFF`;
             } else if (volPromoActive && !promoText) {
                 promoText = `Llevando ${volMinQty}+ bultos: ${volDiscPct}% OFF automático`;
@@ -432,12 +440,13 @@
                 volPromoActive, volMinQty, volDiscPct,
                 mixPromoActive, mixTriggerId, mixTriggerName, mixTriggerQty, mixDiscPct,
                 comboPromoActive, comboId, comboName, comboMinQty, comboDiscPct, comboMemberIds, comboMemberNames,
+                giftPromoActive, giftTriggerQty, giftRewardId, giftRewardName, giftRewardQty,
                 categoria: p.categoria || p.category || 'GENERAL',
                 activo
             };
         }
 
-        // --- MOTOR AUTOMÁTICO DE PRECIO (VOLUMEN + MIX CRUZADO + COMBO MULTI-ARTÍCULO) ---
+        // --- MOTOR AUTOMÁTICO DE PRECIO Y REGALOS SIN CARGO ---
         function calcularPrecioSegunCantidad(p, cantidad) {
             const cant = Number(cantidad) || 0;
 
@@ -457,7 +466,13 @@
                 cumpleCombo = (faltantesComboCount === 0);
             }
 
-            // Selecciona automáticamente el mayor beneficio activo para el cliente
+            // Cálculo proporcional de unidades de regalo ($0) generadas por este artículo
+            const multiplosRegalo = (p.giftPromoActive && p.giftTriggerQty > 0 && cant >= p.giftTriggerQty)
+                ? Math.floor(cant / p.giftTriggerQty)
+                : 0;
+            const cantRegalosGenerados = multiplosRegalo * (p.giftRewardQty || 0);
+            const cumpleGift = (cantRegalosGenerados > 0);
+
             let discPct = 0;
             let tipoDescuento = '';
 
@@ -484,6 +499,8 @@
                 aplicaDescuentoCombo: (tipoDescuento === 'COMBO'),
                 cumpleMix,
                 cumpleCombo,
+                cumpleGift,
+                cantRegalosGenerados,
                 faltantesComboCount,
                 cantGanchoEnCarrito,
                 tipoDescuento,
@@ -493,6 +510,34 @@
                 subtotal: pvpUnitario * cant,
                 comisionTotal: comisionUnitaria * cant
             };
+        }
+
+        // Devuelve la lista consolidada de artículos de regalo ($0) generados por el carrito actual
+        function obtenerRegalosActivosDelCarrito(catalogMap) {
+            const regalosAgrupados = {};
+            Object.keys(carrito).forEach(id => {
+                const cant = Number(carrito[id]) || 0;
+                if (cant > 0) {
+                    const p = catalogMap.find(x => String(x.id) === String(id));
+                    if (p && p.giftPromoActive && p.giftRewardId && cant >= p.giftTriggerQty) {
+                        const cantGratis = Math.floor(cant / p.giftTriggerQty) * p.giftRewardQty;
+                        if (cantGratis > 0) {
+                            const rewId = String(p.giftRewardId);
+                            if (!regalosAgrupados[rewId]) {
+                                const rewProd = catalogMap.find(x => String(x.id) === rewId);
+                                regalosAgrupados[rewId] = {
+                                    rewardId: rewId,
+                                    rewardName: rewProd ? rewProd.nombre : p.giftRewardName,
+                                    cantidad: 0,
+                                    motivo: `Por compra de ${p.nombre}`
+                                };
+                            }
+                            regalosAgrupados[rewId].cantidad += cantGratis;
+                        }
+                    }
+                }
+            });
+            return Object.values(regalosAgrupados);
         }
 
         function initApp() {
@@ -1126,12 +1171,39 @@
             }
         }
 
-        // --- DIBUJA EL BLOQUE DE PRECIO, ESCALA, MIX Y COMBO MULTI-ARTÍCULO EN CADA TARJETA ---
+        // --- DIBUJA EL BLOQUE DE PRECIO, ESCALA, MIX, COMBO Y REGALO SIN CARGO EN CADA TARJETA ---
         function construirHTMLBloquePrecioProducto(p, qty) {
             const calc = calcularPrecioSegunCantidad(p, qty);
             let bannersHTML = '';
 
-            // 1. Banner de Combo Multi-Artículo (Punto 3)
+            // 1. Banner de Regalo Automático por Vencimiento / Sin Cargo (Punto 4)
+            if (p.giftPromoActive && p.giftRewardId) {
+                if (calc.cumpleGift) {
+                    bannersHTML += `
+                        <div class="mt-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/25 border border-emerald-400 text-emerald-200 text-[11px] font-extrabold flex items-center gap-1.5">
+                            <i class="fa-solid fa-gift text-emerald-400"></i>
+                            <span>¡REGALO ACTIVO! +${calc.cantRegalosGenerados} u. de ${p.giftRewardName} SIN CARGO ($0)</span>
+                        </div>
+                    `;
+                } else if (qty > 0 && qty < p.giftTriggerQty) {
+                    const faltan = p.giftTriggerQty - qty;
+                    bannersHTML += `
+                        <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-400/50 text-rose-200 text-[11px] font-bold flex items-center gap-1.5">
+                            <i class="fa-solid fa-gift text-rose-400"></i>
+                            <span>Sumá <strong>${faltan}</strong> más para llevar <strong>+${p.giftRewardQty} ${p.giftRewardName} DE REGALO ($0)</strong></span>
+                        </div>
+                    `;
+                } else {
+                    bannersHTML += `
+                        <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-400/50 text-rose-200 text-[11px] font-bold flex items-center gap-1.5">
+                            <i class="fa-solid fa-gift text-rose-400"></i>
+                            <span>Cada ${p.giftTriggerQty} u. ➔ <strong>+${p.giftRewardQty} de ${p.giftRewardName} SIN CARGO ($0)</strong></span>
+                        </div>
+                    `;
+                }
+            }
+
+            // 2. Banner de Combo Multi-Artículo (Punto 3)
             if (p.comboPromoActive && p.comboMemberIds.length >= 2) {
                 const precioConComboPreview = Math.round(p.pvp * (1 - (p.comboDiscPct / 100)));
                 const listaNombres = (p.comboMemberNames && p.comboMemberNames.length > 0) ? p.comboMemberNames.join(' + ') : `${p.comboMemberIds.length} artículos`;
@@ -1160,7 +1232,7 @@
                 }
             }
 
-            // 2. Banner de Mix Cruzado (Punto 2)
+            // 3. Banner de Mix Cruzado (Punto 2)
             if (p.mixPromoActive) {
                 const precioConMixPreview = Math.round(p.pvp * (1 - (p.mixDiscPct / 100)));
                 if (calc.cumpleMix) {
@@ -1181,7 +1253,7 @@
                 }
             }
 
-            // 3. Banner de Escala / Volumen (Punto 1)
+            // 4. Banner de Escala / Volumen (Punto 1)
             if (p.volPromoActive) {
                 const precioConEscalaPreview = Math.round(p.pvp * (1 - (p.volDiscPct / 100)));
                 if (calc.aplicaDescuentoVolumen) {
@@ -1209,8 +1281,8 @@
                 }
             }
 
-            // 4. Banner de Promo general manual
-            if (!p.volPromoActive && !p.mixPromoActive && !p.comboPromoActive && p.isFeatured && p.promoText) {
+            // 5. Banner de Promo general manual
+            if (!p.volPromoActive && !p.mixPromoActive && !p.comboPromoActive && !p.giftPromoActive && p.isFeatured && p.promoText) {
                 bannersHTML += `
                     <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-200 text-[11px] font-bold flex items-center gap-1.5">
                         <i class="fa-solid fa-bolt text-amber-400"></i>
@@ -1269,8 +1341,10 @@
                 const calc = calcularPrecioSegunCantidad(p, qty);
 
                 let cardStyle = 'bg-slate-900 border border-slate-800 shadow-md';
-                if (calc.aplicaDescuento) {
+                if (calc.aplicaDescuento || calc.cumpleGift) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-500/15';
+                } else if (p.giftPromoActive) {
+                    cardStyle = 'bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border-2 border-rose-500/70 shadow-lg shadow-rose-500/10';
                 } else if (p.comboPromoActive) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-900 border-2 border-emerald-500/60 shadow-lg shadow-emerald-500/10';
                 } else if (p.mixPromoActive) {
@@ -1283,7 +1357,11 @@
                 let badgeHeaderIcon = 'fa-fire';
                 let badgeHeaderText = 'ACCIÓN COMERCIAL / PROMO';
 
-                if (p.comboPromoActive) {
+                if (p.giftPromoActive) {
+                    badgeHeaderClass = 'bg-rose-500 text-white';
+                    badgeHeaderIcon = 'fa-gift';
+                    badgeHeaderText = 'CON REGALO SIN CARGO ($0)';
+                } else if (p.comboPromoActive) {
                     badgeHeaderClass = 'bg-emerald-400 text-slate-950';
                     badgeHeaderIcon = 'fa-box-open';
                     badgeHeaderText = 'COMBO LANZAMIENTO / PACK';
@@ -1360,8 +1438,10 @@
             const cardEl = document.getElementById(`card-${id}`);
             if (cardEl) {
                 let cardStyle = 'bg-slate-900 border border-slate-800 shadow-md';
-                if (calc.aplicaDescuento) {
+                if (calc.aplicaDescuento || calc.cumpleGift) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-500/15';
+                } else if (prod.giftPromoActive) {
+                    cardStyle = 'bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border-2 border-rose-500/70 shadow-lg shadow-rose-500/10';
                 } else if (prod.comboPromoActive) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-900 border-2 border-emerald-500/60 shadow-lg shadow-emerald-500/10';
                 } else if (prod.mixPromoActive) {
@@ -1373,7 +1453,6 @@
             }
         }
 
-        // Refresca productos vinculados por Mix o por Combo Multi-artículo
         function refrescarDependientesMixYCombo(changedId) {
             const todos = (DB.catalogo || []).map(obtenerDatosProducto);
             const prodCambiado = todos.find(x => String(x.id) === String(changedId));
@@ -1388,7 +1467,6 @@
             });
         }
 
-        // Botón de 1 toque en el celular para cargar todos los productos que integran un Combo Lanzamiento
         function cargarPackComboCompleto(prodId) {
             const todos = (DB.catalogo || []).map(obtenerDatosProducto);
             const prod = todos.find(x => String(x.id) === String(prodId));
@@ -1464,7 +1542,12 @@
                 }
             });
 
-            document.getElementById('txtItemsEnCarrito').textContent = `${totalUnidades} bultos`;
+            const regalosList = obtenerRegalosActivosDelCarrito(catalogMap);
+            const totalRegalos = regalosList.reduce((acc, g) => acc + g.cantidad, 0);
+
+            document.getElementById('txtItemsEnCarrito').textContent = totalRegalos > 0
+                ? `${totalUnidades} bultos (+${totalRegalos} de regalo 🎁)`
+                : `${totalUnidades} bultos`;
             document.getElementById('txtTotalCarrito').textContent = fmtMoneda(totalDinero);
             const btnVer = document.getElementById('btnVerPedido');
             if (btnVer) { btnVer.disabled = (totalUnidades === 0); btnVer.style.opacity = (totalUnidades === 0) ? '0.5' : '1'; }
@@ -1511,6 +1594,22 @@
                         </div>
                     `;
                 }
+            });
+
+            // Agrega al resumen las líneas automáticas de regalo sin cargo ($0)
+            const regalosList = obtenerRegalosActivosDelCarrito(catalogMap);
+            regalosList.forEach(reg => {
+                itemsHtml += `
+                    <div class="flex items-center justify-between p-2 rounded-lg bg-rose-950/30 border border-rose-500/40 text-xs">
+                        <div>
+                            <strong class="text-rose-200 block">🎁 ${reg.rewardName}</strong>
+                            <span class="text-[10px] text-rose-300 font-mono">
+                                ${reg.cantidad} un. SIN CARGO (${reg.motivo})
+                            </span>
+                        </div>
+                        <span class="font-mono font-black text-emerald-400">$ 0 (REGALO)</span>
+                    </div>
+                `;
             });
 
             listCont.innerHTML = itemsHtml;
@@ -1585,6 +1684,25 @@
                 alert('Agregá al menos un artículo al pedido.');
                 return;
             }
+
+            // Inyecta automáticamente los artículos de regalo a $0 y descuenta su stock del depósito
+            const regalosList = obtenerRegalosActivosDelCarrito(catalogMap);
+            regalosList.forEach(reg => {
+                itemsPedido.push({
+                    id_producto: String(reg.rewardId),
+                    descripcion: `${reg.rewardName} [SIN CARGO / REGALO]`,
+                    cantidad: Number(reg.cantidad) || 1,
+                    precio_unitario: 0,
+                    subtotal: 0,
+                    comision: 0,
+                    descuento_pct: 100
+                });
+
+                const rawGiftProd = (DB.catalogo || []).find(x => String(x.id || x.codigo || x.sku) === String(reg.rewardId));
+                if (rawGiftProd) {
+                    rawGiftProd.stock = (Number(rawGiftProd.stock) || 0) - (Number(reg.cantidad) || 1);
+                }
+            });
 
             const rawAddr = cliente ? String(cliente.addr || cliente.direccion || '') : dirFallback;
             const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr.trim();
