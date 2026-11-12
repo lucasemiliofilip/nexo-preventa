@@ -386,7 +386,7 @@
             return isNaN(d.getTime()) ? new Date() : d;
         }
 
-        // --- LECTOR DE PRODUCTO Y REGLAS (PUNTO 1: VOLUMEN + PUNTO 2: MIX CRUZADO) ---
+        // --- LECTOR DE PRODUCTO Y REGLAS (VOLUMEN + MIX CRUZADO + COMBO MULTI-ARTÍCULO) ---
         function obtenerDatosProducto(p) {
             const id = String(p.id || p.codigo || p.sku || Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
@@ -403,9 +403,19 @@
             const mixTriggerQty = Number(p.mixTriggerQty) || 0;
             const mixDiscPct = Number(p.mixDiscPct) || 0;
 
-            const isFeatured = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive);
+            const comboPromoActive = Boolean(p.comboPromoActive && p.comboId && Array.isArray(p.comboMemberIds) && p.comboMemberIds.length >= 2 && Number(p.comboDiscPct) > 0);
+            const comboId = p.comboId ? String(p.comboId) : '';
+            const comboName = p.comboName || 'Combo Lanzamiento';
+            const comboMinQty = Math.max(1, Number(p.comboMinQty) || 1);
+            const comboDiscPct = Number(p.comboDiscPct) || 0;
+            const comboMemberIds = Array.isArray(p.comboMemberIds) ? p.comboMemberIds.map(String) : [];
+            const comboMemberNames = Array.isArray(p.comboMemberNames) ? p.comboMemberNames : [];
+
+            const isFeatured = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive || comboPromoActive);
             let promoText = isFeatured ? String(p.promoText || '').trim() : '';
-            if (volPromoActive && !promoText) {
+            if (comboPromoActive && !promoText) {
+                promoText = `📦 ${comboName}: Pack ${comboMemberIds.length} art. ➔ -${comboDiscPct}% OFF`;
+            } else if (volPromoActive && !promoText) {
                 promoText = `Llevando ${volMinQty}+ bultos: ${volDiscPct}% OFF automático`;
             } else if (mixPromoActive && !promoText) {
                 promoText = `Mix: Llevando ${mixTriggerQty}+ de ${mixTriggerName} ➔ ${mixDiscPct}% OFF`;
@@ -421,12 +431,13 @@
                 pvp, comision, comisionPct,
                 volPromoActive, volMinQty, volDiscPct,
                 mixPromoActive, mixTriggerId, mixTriggerName, mixTriggerQty, mixDiscPct,
+                comboPromoActive, comboId, comboName, comboMinQty, comboDiscPct, comboMemberIds, comboMemberNames,
                 categoria: p.categoria || p.category || 'GENERAL',
                 activo
             };
         }
 
-        // --- MOTOR AUTOMÁTICO DE PRECIO (VOLUMEN + MIX CRUZADO) ---
+        // --- MOTOR AUTOMÁTICO DE PRECIO (VOLUMEN + MIX CRUZADO + COMBO MULTI-ARTÍCULO) ---
         function calcularPrecioSegunCantidad(p, cantidad) {
             const cant = Number(cantidad) || 0;
 
@@ -434,24 +445,33 @@
             const cantGanchoEnCarrito = p.mixTriggerId ? (Number(carrito[p.mixTriggerId]) || 0) : 0;
             const cumpleMix = Boolean(p.mixPromoActive && p.mixTriggerId && p.mixTriggerQty > 0 && p.mixDiscPct > 0 && cantGanchoEnCarrito >= p.mixTriggerQty);
 
+            let cumpleCombo = false;
+            let faltantesComboCount = 0;
+            if (p.comboPromoActive && p.comboMemberIds.length >= 2) {
+                p.comboMemberIds.forEach(mId => {
+                    const cEnCarro = Number(carrito[mId]) || 0;
+                    if (cEnCarro < p.comboMinQty) {
+                        faltantesComboCount++;
+                    }
+                });
+                cumpleCombo = (faltantesComboCount === 0);
+            }
+
+            // Selecciona automáticamente el mayor beneficio activo para el cliente
             let discPct = 0;
             let tipoDescuento = '';
 
-            if (cumpleVolumen && cumpleMix) {
-                if (p.mixDiscPct >= p.volDiscPct) {
-                    discPct = p.mixDiscPct;
-                    tipoDescuento = 'MIX';
-                } else {
-                    discPct = p.volDiscPct;
-                    tipoDescuento = 'VOL';
+            const candidatos = [];
+            if (cumpleVolumen) candidatos.push({ tipo: 'VOL', pct: p.volDiscPct });
+            if (cumpleMix) candidatos.push({ tipo: 'MIX', pct: p.mixDiscPct });
+            if (cumpleCombo) candidatos.push({ tipo: 'COMBO', pct: p.comboDiscPct });
+
+            candidatos.forEach(c => {
+                if (c.pct >= discPct) {
+                    discPct = c.pct;
+                    tipoDescuento = c.tipo;
                 }
-            } else if (cumpleMix) {
-                discPct = p.mixDiscPct;
-                tipoDescuento = 'MIX';
-            } else if (cumpleVolumen) {
-                discPct = p.volDiscPct;
-                tipoDescuento = 'VOL';
-            }
+            });
 
             const aplicaDescuento = (discPct > 0);
             const pvpUnitario = aplicaDescuento ? Math.round(p.pvp * (1 - (discPct / 100))) : p.pvp;
@@ -461,7 +481,10 @@
                 aplicaDescuento,
                 aplicaDescuentoVolumen: (tipoDescuento === 'VOL'),
                 aplicaDescuentoMix: (tipoDescuento === 'MIX'),
+                aplicaDescuentoCombo: (tipoDescuento === 'COMBO'),
                 cumpleMix,
+                cumpleCombo,
+                faltantesComboCount,
                 cantGanchoEnCarrito,
                 tipoDescuento,
                 discPct,
@@ -1103,12 +1126,41 @@
             }
         }
 
-        // --- DIBUJA EL BLOQUE DE PRECIO, ESCALA Y MIX CRUZADO EN CADA TARJETA ---
+        // --- DIBUJA EL BLOQUE DE PRECIO, ESCALA, MIX Y COMBO MULTI-ARTÍCULO EN CADA TARJETA ---
         function construirHTMLBloquePrecioProducto(p, qty) {
             const calc = calcularPrecioSegunCantidad(p, qty);
             let bannersHTML = '';
 
-            // 1. Banner de Mix Cruzado (si el producto tiene regla de Mix)
+            // 1. Banner de Combo Multi-Artículo (Punto 3)
+            if (p.comboPromoActive && p.comboMemberIds.length >= 2) {
+                const precioConComboPreview = Math.round(p.pvp * (1 - (p.comboDiscPct / 100)));
+                const listaNombres = (p.comboMemberNames && p.comboMemberNames.length > 0) ? p.comboMemberNames.join(' + ') : `${p.comboMemberIds.length} artículos`;
+
+                if (calc.cumpleCombo) {
+                    bannersHTML += `
+                        <div class="mt-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/25 border border-emerald-400 text-emerald-200 text-[11px] font-extrabold space-y-0.5">
+                            <div class="flex items-center gap-1.5">
+                                <i class="fa-solid fa-box-open text-emerald-400"></i>
+                                <span>¡${p.comboName.toUpperCase()} ACTIVO! -${p.comboDiscPct}% OFF (${fmtMoneda(precioConComboPreview)} c/u)</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    bannersHTML += `
+                        <div class="mt-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/50 text-emerald-200 text-[11px] space-y-1">
+                            <div class="font-bold flex items-center justify-between gap-1">
+                                <span><i class="fa-solid fa-box-open text-emerald-400"></i> ${p.comboName}: <strong>-${p.comboDiscPct}% OFF</strong> (${fmtMoneda(precioConComboPreview)} c/u)</span>
+                            </div>
+                            <span class="block text-[10px] text-slate-300">Incluye (${p.comboMinQty}+ c/u): ${listaNombres}</span>
+                            <button type="button" onclick="cargarPackComboCompleto('${p.id}')" class="mt-1 w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-[10px] uppercase py-1 px-2 rounded-md transition cursor-pointer flex items-center justify-center gap-1 shadow">
+                                <i class="fa-solid fa-cart-plus"></i> Cargar Pack Completo (${p.comboMemberIds.length} art.)
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+
+            // 2. Banner de Mix Cruzado (Punto 2)
             if (p.mixPromoActive) {
                 const precioConMixPreview = Math.round(p.pvp * (1 - (p.mixDiscPct / 100)));
                 if (calc.cumpleMix) {
@@ -1129,7 +1181,7 @@
                 }
             }
 
-            // 2. Banner de Escala / Volumen (si el producto tiene regla de Volumen)
+            // 3. Banner de Escala / Volumen (Punto 1)
             if (p.volPromoActive) {
                 const precioConEscalaPreview = Math.round(p.pvp * (1 - (p.volDiscPct / 100)));
                 if (calc.aplicaDescuentoVolumen) {
@@ -1157,8 +1209,8 @@
                 }
             }
 
-            // 3. Banner de Promo general o aviso de Producto Gancho
-            if (!p.volPromoActive && !p.mixPromoActive && p.isFeatured && p.promoText) {
+            // 4. Banner de Promo general manual
+            if (!p.volPromoActive && !p.mixPromoActive && !p.comboPromoActive && p.isFeatured && p.promoText) {
                 bannersHTML += `
                     <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-200 text-[11px] font-bold flex items-center gap-1.5">
                         <i class="fa-solid fa-bolt text-amber-400"></i>
@@ -1219,6 +1271,8 @@
                 let cardStyle = 'bg-slate-900 border border-slate-800 shadow-md';
                 if (calc.aplicaDescuento) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-500/15';
+                } else if (p.comboPromoActive) {
+                    cardStyle = 'bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-900 border-2 border-emerald-500/60 shadow-lg shadow-emerald-500/10';
                 } else if (p.mixPromoActive) {
                     cardStyle = 'bg-gradient-to-r from-cyan-950/40 via-slate-900 to-slate-900 border-2 border-cyan-500/70 shadow-lg shadow-cyan-500/10';
                 } else if (p.isFeatured) {
@@ -1229,7 +1283,11 @@
                 let badgeHeaderIcon = 'fa-fire';
                 let badgeHeaderText = 'ACCIÓN COMERCIAL / PROMO';
 
-                if (p.mixPromoActive) {
+                if (p.comboPromoActive) {
+                    badgeHeaderClass = 'bg-emerald-400 text-slate-950';
+                    badgeHeaderIcon = 'fa-box-open';
+                    badgeHeaderText = 'COMBO LANZAMIENTO / PACK';
+                } else if (p.mixPromoActive) {
                     badgeHeaderClass = 'bg-cyan-400 text-slate-950';
                     badgeHeaderIcon = 'fa-shuffle';
                     badgeHeaderText = 'COMBO MIX CRUZADO';
@@ -1304,6 +1362,8 @@
                 let cardStyle = 'bg-slate-900 border border-slate-800 shadow-md';
                 if (calc.aplicaDescuento) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-500/15';
+                } else if (prod.comboPromoActive) {
+                    cardStyle = 'bg-gradient-to-r from-emerald-950/30 via-slate-900 to-slate-900 border-2 border-emerald-500/60 shadow-lg shadow-emerald-500/10';
                 } else if (prod.mixPromoActive) {
                     cardStyle = 'bg-gradient-to-r from-cyan-950/40 via-slate-900 to-slate-900 border-2 border-cyan-500/70 shadow-lg shadow-cyan-500/10';
                 } else if (prod.isFeatured) {
@@ -1313,10 +1373,37 @@
             }
         }
 
-        // Si se modifica un producto gancho, refresca al instante todos los productos bonificados que dependen de él
-        function refrescarDependientesMix(triggerId) {
-            const dependientes = (DB.catalogo || []).map(obtenerDatosProducto).filter(x => x.mixPromoActive && String(x.mixTriggerId) === String(triggerId));
-            dependientes.forEach(dep => actualizarVisualTarjetaProducto(dep.id));
+        // Refresca productos vinculados por Mix o por Combo Multi-artículo
+        function refrescarDependientesMixYCombo(changedId) {
+            const todos = (DB.catalogo || []).map(obtenerDatosProducto);
+            const prodCambiado = todos.find(x => String(x.id) === String(changedId));
+
+            todos.forEach(item => {
+                if (item.mixPromoActive && String(item.mixTriggerId) === String(changedId)) {
+                    actualizarVisualTarjetaProducto(item.id);
+                }
+                if (prodCambiado && prodCambiado.comboPromoActive && item.comboPromoActive && item.comboId === prodCambiado.comboId) {
+                    actualizarVisualTarjetaProducto(item.id);
+                }
+            });
+        }
+
+        // Botón de 1 toque en el celular para cargar todos los productos que integran un Combo Lanzamiento
+        function cargarPackComboCompleto(prodId) {
+            const todos = (DB.catalogo || []).map(obtenerDatosProducto);
+            const prod = todos.find(x => String(x.id) === String(prodId));
+            if (!prod || !prod.comboPromoActive || !Array.isArray(prod.comboMemberIds)) return;
+
+            const minReq = Math.max(1, Number(prod.comboMinQty) || 1);
+            prod.comboMemberIds.forEach(mId => {
+                const actual = Number(carrito[mId]) || 0;
+                if (actual < minReq) {
+                    carrito[mId] = minReq;
+                }
+            });
+
+            prod.comboMemberIds.forEach(mId => actualizarVisualTarjetaProducto(mId));
+            actualizarBarraCarrito();
         }
 
         function setearCantidadDirecta(id, rawVal) {
@@ -1327,7 +1414,7 @@
                 carrito[id] = next;
             }
             actualizarVisualTarjetaProducto(id);
-            refrescarDependientesMix(id);
+            refrescarDependientesMixYCombo(id);
             actualizarBarraCarrito();
         }
 
@@ -1346,7 +1433,7 @@
             }
 
             actualizarVisualTarjetaProducto(id);
-            refrescarDependientesMix(id);
+            refrescarDependientesMixYCombo(id);
             actualizarBarraCarrito();
         }
 
@@ -1404,8 +1491,12 @@
                     const p = catalogMap.find(x => String(x.id) === String(id));
                     const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '' };
                     grandTotal += calc.subtotal;
+                    let nombreEtiqueta = 'Vol.';
+                    if (calc.tipoDescuento === 'MIX') nombreEtiqueta = 'Mix';
+                    if (calc.tipoDescuento === 'COMBO') nombreEtiqueta = 'Combo';
+
                     const etiquetaDesc = calc.aplicaDescuento
-                        ? `<span class="text-emerald-400 font-bold ml-1">(-${calc.discPct}% ${calc.tipoDescuento === 'MIX' ? 'Mix' : 'Vol.'})</span>`
+                        ? `<span class="text-emerald-400 font-bold ml-1">(-${calc.discPct}% ${nombreEtiqueta})</span>`
                         : '';
                     itemsHtml += `
                         <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs">
@@ -1463,7 +1554,10 @@
                 if (cant > 0) {
                     const p = catalogMap.find(x => String(x.id) === String(id));
                     const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '' };
-                    const tagTipo = calc.tipoDescuento === 'MIX' ? 'Mix' : 'Promo';
+                    let tagTipo = 'Promo';
+                    if (calc.tipoDescuento === 'MIX') tagTipo = 'Mix';
+                    if (calc.tipoDescuento === 'COMBO') tagTipo = 'Combo';
+
                     const nombreFinal = (p && calc.aplicaDescuento)
                         ? `${p.nombre} [${tagTipo} -${calc.discPct}%]`
                         : (p ? String(p.nombre || 'Artículo') : 'Artículo');
