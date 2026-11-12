@@ -41,7 +41,7 @@
                                 <i class="fa-solid fa-mobile-screen-button"></i> Vinculado a este celular
                             </span>
                         </div>
-                        <select id="loginVendedorSelect" class="input-mobile w-full px-3.5 py-3 text-xs font-bold text-emerald-400 outline-none cursor-pointer disabled:opacity-80 disabled:cursor-not-allowed">
+                        <select id="loginVendedorSelect" onchange="actualizarLeyendaPinLogin()" class="input-mobile w-full px-3.5 py-3 text-xs font-bold text-emerald-400 outline-none cursor-pointer disabled:opacity-80 disabled:cursor-not-allowed">
                         </select>
                         <button type="button" id="btnDesbloquearVendedorAdmin" onclick="desbloquearVendedorDispositivoAdmin()" class="hidden mt-1.5 text-[10px] text-slate-500 hover:text-amber-400 font-semibold underline cursor-pointer w-full text-right">
                             🔓 Cambiar vendedor asignado (Solo Admin)
@@ -57,7 +57,10 @@
                             class="input-mobile input-pin w-full px-3.5 py-3 text-sm text-center font-bold text-white outline-none focus:border-emerald-500 transition"
                             onkeydown="if(event.key === 'Enter') ingresarPreventa()"
                         >
-                        <span class="text-[10px] text-slate-500 block text-center mt-1">Clave por defecto: <strong class="text-slate-400 font-mono">1234</strong></span>
+                        <span id="lblHintPinLogin" class="text-[10px] text-slate-500 block text-center mt-1">Clave inicial por defecto: <strong class="text-slate-400 font-mono">1234</strong></span>
+                        <button type="button" onclick="resetearPinVendedorAdmin()" class="mt-1 text-[10px] text-slate-500 hover:text-amber-400 font-semibold underline cursor-pointer w-full text-center">
+                            🔑 Olvidé mi PIN (Blanquear con clave Admin)
+                        </button>
                     </div>
                 </div>
                 <button onclick="ingresarPreventa()" class="w-full bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase py-3.5 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-2">
@@ -259,16 +262,16 @@
             </div>
             <div class="space-y-3 text-left">
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 mb-1">PIN Actual (por defecto 1234):</label>
-                    <input type="password" id="pinActualInput" maxlength="12" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-white outline-none">
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">PIN Actual:</label>
+                    <input type="password" id="pinActualInput" maxlength="12" placeholder="••••" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-white outline-none">
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nuevo PIN:</label>
-                    <input type="password" id="pinNuevoInput" maxlength="12" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-amber-400 outline-none">
+                    <label class="block text-[10px] font-bold text-slate-400 mb-1">Nuevo PIN (mínimo 4 dígitos o letras):</label>
+                    <input type="password" id="pinNuevoInput" maxlength="12" placeholder="••••" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-amber-400 outline-none">
                 </div>
                 <div>
                     <label class="block text-[10px] font-bold text-slate-400 mb-1">Repetir Nuevo PIN:</label>
-                    <input type="password" id="pinNuevoConfInput" maxlength="12" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-amber-400 outline-none">
+                    <input type="password" id="pinNuevoConfInput" maxlength="12" placeholder="••••" class="input-mobile input-pin w-full px-3 py-2.5 text-sm text-center font-bold text-amber-400 outline-none">
                 </div>
             </div>
             <button onclick="guardarNuevoPin()" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase py-3 rounded-xl transition shadow-lg shadow-amber-500/20 active:scale-95 cursor-pointer">
@@ -290,18 +293,15 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // LLAVE ESTABLE DE DATOS Y LLAVE PERPETUA DE VENDEDOR VINCULADO AL CELULAR
+        // LLAVES PERMANENTES DE DATOS, VENDEDOR VINCULADO Y PINES PERSONALIZADOS
         const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v32';
         const STORAGE_KEY_VENDEDOR_FIJO = 'nexo_vendedor_fijo_celular_permanente';
+        const STORAGE_KEY_PINS_FIJOS = 'nexo_vendedores_pins_permanente';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
             vendedorActivo: '',
-            vendedoresPins: {
-                'Walter Coronel': '1234',
-                'Oscar Cisnero': '1234',
-                'Lucas Filip': '1234'
-            },
+            vendedoresPins: {},
             catalogo: [],
             clientes: [],
             clientesLocalesNuevos: [],
@@ -315,7 +315,7 @@
         function esVendedorValidoPreventa(nombre) {
             if (!nombre) return false;
             const limpio = String(nombre).trim().toLowerCase();
-            return limpio.length > 0 && limpio !== 'mostrador';
+            return limpio.length > 0 && limpio !== 'mostrador' && limpio !== 'bloqueado_manual';
         }
 
         function obtenerVendedorFijoDispositivo() {
@@ -327,6 +327,35 @@
             if (esVendedorValidoPreventa(nombre)) {
                 localStorage.setItem(STORAGE_KEY_VENDEDOR_FIJO, nombre.trim());
             }
+        }
+
+        function obtenerPinsGuardadosLocalmente() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_PINS_FIJOS);
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function guardarPinsLocalmente(pinsMap) {
+            try {
+                localStorage.setItem(STORAGE_KEY_PINS_FIJOS, JSON.stringify(pinsMap || {}));
+            } catch (e) {}
+        }
+
+        // Devuelve el PIN personalizado del vendedor o '1234' si nunca lo cambió
+        function obtenerPinEsperadoVendedor(nombreVendedor) {
+            if (!nombreVendedor) return '1234';
+            const nombreLimpio = String(nombreVendedor).trim();
+            const pinsLocal = obtenerPinsGuardadosLocalmente();
+            if (pinsLocal[nombreLimpio] && String(pinsLocal[nombreLimpio]).trim().length > 0) {
+                return String(pinsLocal[nombreLimpio]).trim();
+            }
+            if (DB.vendedoresPins && DB.vendedoresPins[nombreLimpio] && String(DB.vendedoresPins[nombreLimpio]).trim().length > 0) {
+                return String(DB.vendedoresPins[nombreLimpio]).trim();
+            }
+            return '1234';
         }
 
         function fmtMoneda(num) {
@@ -378,7 +407,6 @@
 
         function initApp() {
             try {
-                // Rescata datos de versión actual o versión inmediata anterior sin desloguear
                 const rawCurrent = localStorage.getItem(STORAGE_KEY_PREVENTA) || localStorage.getItem('nexo_preventa_stock_v31');
                 if (rawCurrent) {
                     const parsed = JSON.parse(rawCurrent);
@@ -386,15 +414,19 @@
                 }
             } catch (e) {}
 
-            // Si había quedado logueado como "Mostrador", lo limpia inmediatamente
+            // Sincroniza y prioriza los PINs personalizados guardados en el dispositivo
+            const pinsGuardados = obtenerPinsGuardadosLocalmente();
+            DB.vendedoresPins = Object.assign({}, DB.vendedoresPins || {}, pinsGuardados);
+            guardarPinsLocalmente(DB.vendedoresPins);
+
+            const estabaBloqueadoManual = (DB.vendedorActivo === 'BLOQUEADO_MANUAL');
             if (!esVendedorValidoPreventa(DB.vendedorActivo)) {
                 DB.vendedorActivo = '';
             }
 
-            // Si ya tenía un vendedor válido o un vendedor fijo en el dispositivo, lo mantiene siempre activo
             const vendedorFijo = obtenerVendedorFijoDispositivo();
             if (vendedorFijo) {
-                if (DB.vendedorActivo !== 'BLOQUEADO_MANUAL') {
+                if (!estabaBloqueadoManual) {
                     DB.vendedorActivo = vendedorFijo;
                 }
             } else if (esVendedorValidoPreventa(DB.vendedorActivo)) {
@@ -409,8 +441,8 @@
             DB.clientesLocalesNuevos = Array.isArray(DB.clientesLocalesNuevos) ? DB.clientesLocalesNuevos : [];
             saveDB();
 
-            if (!esVendedorValidoPreventa(DB.vendedorActivo) || DB.vendedorActivo === 'BLOQUEADO_MANUAL') {
-                DB.vendedorActivo = '';
+            if (!esVendedorValidoPreventa(DB.vendedorActivo) || estabaBloqueadoManual) {
+                DB.vendedorActivo = estabaBloqueadoManual ? 'BLOQUEADO_MANUAL' : '';
                 mostrarPantallaLogin();
             } else {
                 ocultarPantallaLogin();
@@ -514,8 +546,31 @@
 
             db.collection('nexo_erp').doc('pines_vendedores').onSnapshot((doc) => {
                 if (doc.exists) {
-                    DB.vendedoresPins = Object.assign(DB.vendedoresPins || {}, doc.data());
+                    const pinsNube = doc.data() || {};
+                    const pinsLocal = obtenerPinsGuardadosLocalmente();
+                    const combinados = Object.assign({}, DB.vendedoresPins || {});
+
+                    // Incorporamos los PINs de la nube sin permitir que un '1234' viejo pise un PIN personalizado local
+                    Object.keys(pinsNube).forEach(vend => {
+                        const pinNube = String(pinsNube[vend] || '').trim();
+                        const pinLoc = String(pinsLocal[vend] || '').trim();
+                        if (pinLoc && pinLoc !== '1234' && pinNube === '1234') {
+                            combinados[vend] = pinLoc;
+                        } else if (pinNube) {
+                            combinados[vend] = pinNube;
+                        }
+                    });
+
+                    Object.keys(pinsLocal).forEach(vend => {
+                        if (!combinados[vend] && pinsLocal[vend]) {
+                            combinados[vend] = String(pinsLocal[vend]).trim();
+                        }
+                    });
+
+                    DB.vendedoresPins = combinados;
+                    guardarPinsLocalmente(DB.vendedoresPins);
                     saveDB();
+                    actualizarLeyendaPinLogin();
                 }
             });
         }
@@ -705,15 +760,22 @@
             document.getElementById('modalCambiarPin').classList.add('hidden');
         }
 
+        // --- CAMBIO DE PIN ESTRICTO (ANULA EL 1234 UNA VEZ CAMBIADO) ---
         function guardarNuevoPin() {
             const actual = document.getElementById('pinActualInput').value.trim();
             const nuevo = document.getElementById('pinNuevoInput').value.trim();
             const conf = document.getElementById('pinNuevoConfInput').value.trim();
             
-            const pinEsperado = (DB.vendedoresPins && DB.vendedoresPins[DB.vendedorActivo]) || '1234';
+            const vendedor = obtenerVendedorFijoDispositivo() || DB.vendedorActivo;
+            if (!esVendedorValidoPreventa(vendedor)) {
+                alert('No hay un vendedor activo seleccionado.');
+                return;
+            }
 
-            if (actual !== pinEsperado && actual !== '1234') {
-                alert('El PIN actual es incorrecto.');
+            const pinEsperado = obtenerPinEsperadoVendedor(vendedor);
+
+            if (actual !== pinEsperado) {
+                alert('El PIN actual ingresado es incorrecto.');
                 return;
             }
             if (nuevo.length < 4) {
@@ -726,15 +788,74 @@
             }
 
             DB.vendedoresPins = DB.vendedoresPins || {};
-            DB.vendedoresPins[DB.vendedorActivo] = nuevo;
+            DB.vendedoresPins[vendedor] = nuevo;
+            
+            const pinsLocal = obtenerPinsGuardadosLocalmente();
+            pinsLocal[vendedor] = nuevo;
+            guardarPinsLocalmente(pinsLocal);
             saveDB();
 
             if (typeof db !== 'undefined') {
-                db.collection('nexo_erp').doc('pines_vendedores').set(DB.vendedoresPins, { merge: true }).catch(() => {});
+                const payloadPin = {};
+                payloadPin[vendedor] = nuevo;
+                db.collection('nexo_erp').doc('pines_vendedores').set(payloadPin, { merge: true }).catch(() => {});
             }
 
+            actualizarLeyendaPinLogin();
             cerrarCambioPinModal();
-            alert('¡Contraseña actualizada con éxito!');
+            alert(`¡Contraseña de ${vendedor} actualizada con éxito! A partir de ahora solo podrás ingresar con tu nuevo PIN.`);
+        }
+
+        function actualizarLeyendaPinLogin() {
+            const sel = document.getElementById('loginVendedorSelect');
+            const lblHint = document.getElementById('lblHintPinLogin');
+            if (!lblHint) return;
+
+            const vendedorElegido = obtenerVendedorFijoDispositivo() || (sel ? sel.value : '');
+            if (!esVendedorValidoPreventa(vendedorElegido)) {
+                lblHint.innerHTML = 'Clave inicial por defecto: <strong class="text-slate-400 font-mono">1234</strong>';
+                return;
+            }
+
+            const pinActual = obtenerPinEsperadoVendedor(vendedorElegido);
+            if (pinActual !== '1234') {
+                lblHint.innerHTML = '<span class="text-emerald-400 font-semibold"><i class="fa-solid fa-shield-halved"></i> Ingresá tu PIN personal configurado</span>';
+            } else {
+                lblHint.innerHTML = 'Clave inicial por defecto: <strong class="text-slate-400 font-mono">1234</strong>';
+            }
+        }
+
+        function resetearPinVendedorAdmin() {
+            const sel = document.getElementById('loginVendedorSelect');
+            const vendedorElegido = obtenerVendedorFijoDispositivo() || (sel ? sel.value : '');
+            if (!esVendedorValidoPreventa(vendedorElegido)) {
+                alert('Primero seleccioná el vendedor en la lista.');
+                return;
+            }
+
+            const clave = prompt(`🔑 Ingresá la clave de Administrador para restablecer el PIN de ${vendedorElegido} a 1234:`);
+            if (!clave) return;
+
+            if (clave.trim().toLowerCase() === 'admin' || clave.trim() === '4321') {
+                DB.vendedoresPins = DB.vendedoresPins || {};
+                DB.vendedoresPins[vendedorElegido] = '1234';
+
+                const pinsLocal = obtenerPinsGuardadosLocalmente();
+                pinsLocal[vendedorElegido] = '1234';
+                guardarPinsLocalmente(pinsLocal);
+                saveDB();
+
+                if (typeof db !== 'undefined') {
+                    const payloadPin = {};
+                    payloadPin[vendedorElegido] = '1234';
+                    db.collection('nexo_erp').doc('pines_vendedores').set(payloadPin, { merge: true }).catch(() => {});
+                }
+
+                actualizarLeyendaPinLogin();
+                alert(`✅ El PIN de ${vendedorElegido} fue restablecido a 1234.`);
+            } else {
+                alert('⛔ Clave de Administrador incorrecta.');
+            }
         }
 
         // --- LOGIN CON CANDADO DE VENDEDOR ÚNICO POR DISPOSITIVO ---
@@ -754,14 +875,12 @@
                 }
 
                 if (vendedorFijo) {
-                    // El celular ya tiene un vendedor asignado: bloqueamos el selector en su nombre
                     sel.innerHTML = `<option value="${vendedorFijo}" selected>${vendedorFijo}</option>`;
                     sel.value = vendedorFijo;
                     sel.disabled = true;
                     if (badgeFijo) badgeFijo.classList.remove('hidden');
                     if (btnDesbloquear) btnDesbloquear.classList.remove('hidden');
                 } else {
-                    // Primera vez en este celular: obliga a desplegar y elegir nombre (sin preseleccionar el primero)
                     sel.innerHTML = '<option value="" disabled selected hidden>-- Seleccioná tu nombre --</option>' +
                         listaVendedores.map(v => `<option value="${v}">${v}</option>`).join('');
                     sel.disabled = false;
@@ -770,6 +889,7 @@
                 }
             }
             if (pinInput) pinInput.value = '';
+            actualizarLeyendaPinLogin();
             if (loginModal) loginModal.classList.remove('hidden');
         }
 
@@ -803,14 +923,14 @@
                 return;
             }
 
-            const pinEsperado = (DB.vendedoresPins && DB.vendedoresPins[vendedorElegido]) || '1234';
-            if (pinIngresado !== pinEsperado && pinIngresado !== '1234') {
+            // Validación estricta contra el PIN actual del vendedor (sin puerta trasera 1234)
+            const pinEsperado = obtenerPinEsperadoVendedor(vendedorElegido);
+            if (pinIngresado !== pinEsperado) {
                 alert('Contraseña incorrecta.');
                 if (pinInput) pinInput.value = '';
                 return;
             }
 
-            // Vincula permanentemente este celular al vendedor elegido
             fijarVendedorEnDispositivo(vendedorElegido);
             DB.vendedorActivo = vendedorElegido;
             saveDB();
