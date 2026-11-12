@@ -155,7 +155,7 @@
                         Todos los Artículos
                     </button>
                     <button id="btnFiltroPromos" onclick="setFiltroPromos(true)" class="flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-slate-900 text-amber-400 border border-amber-500/40 flex items-center justify-center gap-1.5">
-                        <i class="fa-solid fa-fire"></i> Promos Activas (<span id="badgeCantPromos">0</span>)
+                        <i class="fa-solid fa-fire"></i> Promos / Incentivos (<span id="badgeCantPromos">0</span>)
                     </button>
                 </div>
 
@@ -458,23 +458,26 @@
             };
         }
 
-        // --- LECTOR DE PRODUCTO Y REGLAS (VOLUMEN + MIX + COMBO + REGALOS $0) ---
+        // --- LECTOR DE PRODUCTO Y REGLAS (PUNTOS 1 AL 6: VOLUMEN, MIX, COMBO, REGALO $0 E INCENTIVO VENDEDOR) ---
         function obtenerDatosProducto(p) {
             const id = String(p.id || p.codigo || p.sku || Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
             const stock = !isNaN(Number(p.stock)) ? Number(p.stock) : 0;
             
+            // Punto 1: Volumen
             const volPromoActive = Boolean(p.volPromoActive && Number(p.volMinQty) > 0 && Number(p.volDiscPct) > 0);
             const volMinQty = Number(p.volMinQty) || 0;
             const volDiscPct = Number(p.volDiscPct) || 0;
 
+            // Punto 2: Mix Cruzado
             const mixPromoActive = Boolean(p.mixPromoActive && p.mixTriggerId && Number(p.mixTriggerQty) > 0 && Number(p.mixDiscPct) > 0);
             const mixTriggerId = p.mixTriggerId ? String(p.mixTriggerId) : '';
             const mixTriggerName = p.mixTriggerName || 'Producto Gancho';
             const mixTriggerQty = Number(p.mixTriggerQty) || 0;
             const mixDiscPct = Number(p.mixDiscPct) || 0;
 
+            // Punto 3: Combo Multi-artículo
             const comboPromoActive = Boolean(p.comboPromoActive && p.comboId && Array.isArray(p.comboMemberIds) && p.comboMemberIds.length >= 2 && Number(p.comboDiscPct) > 0);
             const comboId = p.comboId ? String(p.comboId) : '';
             const comboName = p.comboName || 'Combo Lanzamiento';
@@ -483,14 +486,32 @@
             const comboMemberIds = Array.isArray(p.comboMemberIds) ? p.comboMemberIds.map(String) : [];
             const comboMemberNames = Array.isArray(p.comboMemberNames) ? p.comboMemberNames : [];
 
+            // Punto 4: Regalo sin cargo ($0)
             const giftPromoActive = Boolean(p.giftPromoActive && p.giftRewardId && Number(p.giftTriggerQty) > 0 && Number(p.giftRewardQty) > 0);
             const giftTriggerQty = Math.max(1, Number(p.giftTriggerQty) || 1);
             const giftRewardId = p.giftRewardId ? String(p.giftRewardId) : '';
             const giftRewardName = p.giftRewardName || 'Artículo de Regalo';
             const giftRewardQty = Math.max(1, Number(p.giftRewardQty) || 1);
 
-            const isFeatured = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive || comboPromoActive || giftPromoActive);
-            let promoText = isFeatured ? String(p.promoText || '').trim() : '';
+            // Punto 6: Incentivo de Comisión por Vendedor (Plus de comisión en artículos seleccionados)
+            const rawIncActive = Boolean(p.incPromoActive || p.incentiveActive || p.commPromoActive || p.plusComisionActive);
+            const rawIncPlusPct = Number(p.incPlusPct || p.incentivePlusPct || p.commPlusPct || p.plusComisionPct || p.extraSellerPct || 0);
+            const incMinQty = Math.max(1, Number(p.incMinQty || p.incentiveMinQty || p.commMinQty || 1));
+            const incTargetSeller = String(p.incTargetSeller || p.incentiveSeller || p.commTargetSeller || 'TODOS').trim();
+            const incNote = String(p.incNote || p.incentiveNote || p.commNote || '').trim();
+
+            const vendActualLimpio = (DB.vendedorActivo || '').toLowerCase().trim();
+            const targetLimpio = incTargetSeller.toLowerCase();
+            const aplicaAEsteVendedor = !targetLimpio || targetLimpio === 'todos' || targetLimpio === 'all' || (vendActualLimpio && (targetLimpio.includes(vendActualLimpio) || vendActualLimpio.includes(targetLimpio)));
+            const incPromoActive = Boolean(rawIncActive && rawIncPlusPct > 0 && aplicaAEsteVendedor);
+            const incPlusPct = incPromoActive ? rawIncPlusPct : 0;
+
+            // Promo para el cliente (usada en el PDF de Lista de Precios)
+            const isCustomerPromo = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive || comboPromoActive || giftPromoActive);
+            // Destacado en la app del preventista (incluye incentivos de comisión)
+            const isFeatured = Boolean(isCustomerPromo || incPromoActive);
+
+            let promoText = isCustomerPromo ? String(p.promoText || '').trim() : '';
             if (giftPromoActive && !promoText) {
                 promoText = `🎁 Llevando cada ${giftTriggerQty} u. ➔ +${giftRewardQty} de ${giftRewardName} SIN CARGO ($0)`;
             } else if (comboPromoActive && !promoText) {
@@ -502,23 +523,24 @@
             }
             
             const pvp = Number(p.pvp) || 0;
-            const comisionPct = Number(p.sellerPct || p.comisionPct || 0);
-            const comision = pvp > 0 ? (pvp * (comisionPct / 100)) : 0;
+            const comisionBasePct = Number(p.sellerPct || p.comisionPct || 0);
+            const comision = pvp > 0 ? (pvp * (comisionBasePct / 100)) : 0;
             const activo = (p.selectedForCatalog !== false && p.inCatalog !== false && p.activo !== false);
 
             return {
-                id, nombre, presentacion, stock, isFeatured, promoText,
-                pvp, comision, comisionPct,
+                id, nombre, presentacion, stock, isFeatured, isCustomerPromo, promoText,
+                pvp, comision, comisionPct: comisionBasePct, comisionBasePct,
                 volPromoActive, volMinQty, volDiscPct,
                 mixPromoActive, mixTriggerId, mixTriggerName, mixTriggerQty, mixDiscPct,
                 comboPromoActive, comboId, comboName, comboMinQty, comboDiscPct, comboMemberIds, comboMemberNames,
                 giftPromoActive, giftTriggerQty, giftRewardId, giftRewardName, giftRewardQty,
+                incPromoActive, incPlusPct, incMinQty, incTargetSeller, incNote,
                 categoria: p.categoria || p.category || 'GENERAL',
                 activo
             };
         }
 
-        // --- MOTOR AUTOMÁTICO DE PRECIO Y REGALOS SIN CARGO ---
+        // --- MOTOR AUTOMÁTICO DE PRECIO, REGALOS SIN CARGO E INCENTIVO DE COMISIÓN ---
         function calcularPrecioSegunCantidad(p, cantidad) {
             const cant = Number(cantidad) || 0;
 
@@ -561,7 +583,12 @@
 
             const aplicaDescuento = (discPct > 0);
             const pvpUnitario = aplicaDescuento ? Math.round(p.pvp * (1 - (discPct / 100))) : p.pvp;
-            const comisionUnitaria = pvpUnitario > 0 ? (pvpUnitario * (p.comisionPct / 100)) : 0;
+
+            // Evaluación de Incentivo de Comisión por Vendedor (Punto 6)
+            const cumpleIncentivo = Boolean(p.incPromoActive && p.incPlusPct > 0 && (cant >= p.incMinQty || (cant === 0 && p.incMinQty <= 1)));
+            const comisionEfectivaPct = p.comisionBasePct + (cumpleIncentivo ? p.incPlusPct : 0);
+            const comisionUnitaria = pvpUnitario > 0 ? (pvpUnitario * (comisionEfectivaPct / 100)) : 0;
+            const plusComisionUnitaria = (cumpleIncentivo && pvpUnitario > 0) ? (pvpUnitario * (p.incPlusPct / 100)) : 0;
 
             return {
                 aplicaDescuento,
@@ -571,13 +598,16 @@
                 cumpleMix,
                 cumpleCombo,
                 cumpleGift,
+                cumpleIncentivo,
                 cantRegalosGenerados,
                 faltantesComboCount,
                 cantGanchoEnCarrito,
                 tipoDescuento,
                 discPct,
                 pvpUnitario,
+                comisionEfectivaPct,
                 comisionUnitaria,
+                plusComisionUnitaria,
                 subtotal: pvpUnitario * cant,
                 comisionTotal: comisionUnitaria * cant
             };
@@ -839,7 +869,8 @@
                 `;
             }
 
-            const destacados = prods.filter(p => p.isFeatured);
+            // En el PDF para clientes solo mostramos promos de clientes (nunca incentivos internos de comisión)
+            const destacados = prods.filter(p => p.isCustomerPromo);
             if (destacados.length > 0) {
                 html += `
                     <div style="margin-bottom: 14px; padding: 10px 12px; border-radius: 6px; border: 1.5px solid #f59e0b; background: #fffbeb;">
@@ -886,7 +917,7 @@
                                 <tr>
                                     <td style="padding: 6px 8px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">
                                         <strong>${p.nombre}</strong>
-                                        ${p.isFeatured ? `<span style="background:#fef3c7; color:#92400e; font-size:9px; font-weight:800; padding:1px 5px; border-radius:4px; margin-left:4px;">🔥 ${p.promoText || 'PROMO'}</span>` : ''}
+                                        ${p.isCustomerPromo ? `<span style="background:#fef3c7; color:#92400e; font-size:9px; font-weight:800; padding:1px 5px; border-radius:4px; margin-left:4px;">🔥 ${p.promoText || 'PROMO'}</span>` : ''}
                                     </td>
                                     <td style="padding: 6px 8px; border-bottom: 1px solid #e2e8f0; color: #64748b;">${p.presentacion || '-'}</td>
                                     <td style="padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-family: monospace; font-size: 13px; font-weight: 900; color: #047857; text-align: right; white-space: nowrap;">${fmtMoneda(p.pvp)}</td>
@@ -1253,10 +1284,31 @@
             }
         }
 
-        // --- DIBUJA EL BLOQUE DE PRECIO, ESCALA, MIX, COMBO Y REGALO SIN CARGO EN CADA TARJETA ---
+        // --- DIBUJA EL BLOQUE DE PRECIO, ESCALA, MIX, COMBO, REGALO $0 E INCENTIVO DE COMISIÓN ---
         function construirHTMLBloquePrecioProducto(p, qty) {
             const calc = calcularPrecioSegunCantidad(p, qty);
             let bannersHTML = '';
+
+            // 0. Banner de Incentivo de Comisión por Vendedor (Punto 6 - Exclusivo Preventista)
+            if (p.incPromoActive && p.incPlusPct > 0) {
+                const plusEnPesos = Math.round(calc.pvpUnitario * (p.incPlusPct / 100));
+                if (qty > 0 && qty < p.incMinQty) {
+                    const faltanInc = p.incMinQty - qty;
+                    bannersHTML += `
+                        <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-400/50 text-indigo-200 text-[11px] font-bold flex items-center gap-1.5">
+                            <i class="fa-solid fa-bullseye text-indigo-400"></i>
+                            <span>Vendé <strong>${faltanInc}</strong> más para ganar <strong>+${p.incPlusPct}% Comisión Extra</strong> (+${fmtMoneda(plusEnPesos)} c/u)</span>
+                        </div>
+                    `;
+                } else {
+                    bannersHTML += `
+                        <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/25 border border-indigo-400 text-indigo-200 text-[11px] font-extrabold flex items-center gap-1.5">
+                            <i class="fa-solid fa-sack-dollar text-indigo-300"></i>
+                            <span>🎯 PREMIO COMISIÓN: <strong>+${p.incPlusPct}% Extra</strong> (${p.comisionBasePct}% ➔ ${p.comisionBasePct + p.incPlusPct}%) ${p.incMinQty > 1 ? `• Desde ${p.incMinQty} u.` : ''}</span>
+                        </div>
+                    `;
+                }
+            }
 
             // 1. Banner de Regalo Automático por Vencimiento / Sin Cargo (Punto 4)
             if (p.giftPromoActive && p.giftRewardId) {
@@ -1364,7 +1416,7 @@
             }
 
             // 5. Banner de Promo general manual
-            if (!p.volPromoActive && !p.mixPromoActive && !p.comboPromoActive && !p.giftPromoActive && p.isFeatured && p.promoText) {
+            if (!p.volPromoActive && !p.mixPromoActive && !p.comboPromoActive && !p.giftPromoActive && p.isCustomerPromo && p.promoText) {
                 bannersHTML += `
                     <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-200 text-[11px] font-bold flex items-center gap-1.5">
                         <i class="fa-solid fa-bolt text-amber-400"></i>
@@ -1373,21 +1425,29 @@
                 `;
             }
 
+            const badgeComisionStyle = calc.cumpleIncentivo
+                ? 'bg-indigo-500/25 text-indigo-200 border-indigo-400'
+                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+
+            const textoComisionPct = calc.cumpleIncentivo
+                ? `🎯 ${calc.comisionEfectivaPct}% (Plus +${p.incPlusPct}%)`
+                : `${p.comisionPct}%`;
+
             const lineaPrecioHTML = calc.aplicaDescuento
                 ? `
                     <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span class="text-xs font-mono text-slate-400 line-through">${fmtMoneda(p.pvp)}</span>
                         <span class="text-base font-black font-mono text-emerald-400">${fmtMoneda(calc.pvpUnitario)}</span>
-                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
-                            +$ ${Math.round(calc.comisionUnitaria).toLocaleString('es-AR')} (${p.comisionPct}%)
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md border font-mono ${badgeComisionStyle}">
+                            +$ ${Math.round(calc.comisionUnitaria).toLocaleString('es-AR')} (${textoComisionPct})
                         </span>
                     </div>
                 `
                 : `
                     <div class="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span class="text-base font-black font-mono text-white">${fmtMoneda(p.pvp)}</span>
-                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-mono">
-                            +$ ${Math.round(p.comision).toLocaleString('es-AR')} (${p.comisionPct}%)
+                        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md border font-mono ${badgeComisionStyle}">
+                            +$ ${Math.round(calc.comisionUnitaria).toLocaleString('es-AR')} (${textoComisionPct})
                         </span>
                     </div>
                 `;
@@ -1436,7 +1496,7 @@
             }
 
             if (filtrados.length === 0) {
-                container.innerHTML = `<div class="p-8 text-center text-slate-500 italic text-xs bg-slate-900 rounded-2xl border border-slate-800">${soloPromosActivas ? 'No hay acciones comerciales activas en este momento.' : 'No hay productos disponibles.'}</div>`;
+                container.innerHTML = `<div class="p-8 text-center text-slate-500 italic text-xs bg-slate-900 rounded-2xl border border-slate-800">${soloPromosActivas ? 'No hay acciones comerciales ni incentivos activos en este momento.' : 'No hay productos disponibles.'}</div>`;
                 return;
             }
 
@@ -1449,6 +1509,8 @@
                 let cardStyle = 'bg-slate-900 border border-slate-800 shadow-md';
                 if (calc.aplicaDescuento || calc.cumpleGift) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-500/15';
+                } else if (p.incPromoActive) {
+                    cardStyle = 'bg-gradient-to-r from-indigo-950/45 via-slate-900 to-slate-900 border-2 border-indigo-500/75 shadow-lg shadow-indigo-500/10';
                 } else if (p.giftPromoActive) {
                     cardStyle = 'bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border-2 border-rose-500/70 shadow-lg shadow-rose-500/10';
                 } else if (p.comboPromoActive) {
@@ -1479,6 +1541,10 @@
                     badgeHeaderClass = 'bg-purple-500 text-white';
                     badgeHeaderIcon = 'fa-boxes-stacked';
                     badgeHeaderText = 'DESCUENTO POR VOLUMEN';
+                } else if (p.incPromoActive) {
+                    badgeHeaderClass = 'bg-indigo-500 text-white';
+                    badgeHeaderIcon = 'fa-sack-dollar';
+                    badgeHeaderText = `INCENTIVO VENDEDOR (+${p.incPlusPct}% COMISIÓN)`;
                 }
 
                 const stockBadgeColor = p.stock > 0 ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30' : 'text-rose-400 bg-rose-500/10 border-rose-500/30';
@@ -1546,6 +1612,8 @@
                 let cardStyle = 'bg-slate-900 border border-slate-800 shadow-md';
                 if (calc.aplicaDescuento || calc.cumpleGift) {
                     cardStyle = 'bg-gradient-to-r from-emerald-950/50 via-slate-900 to-slate-900 border-2 border-emerald-500 shadow-lg shadow-emerald-500/15';
+                } else if (prod.incPromoActive) {
+                    cardStyle = 'bg-gradient-to-r from-indigo-950/45 via-slate-900 to-slate-900 border-2 border-indigo-500/75 shadow-lg shadow-indigo-500/10';
                 } else if (prod.giftPromoActive) {
                     cardStyle = 'bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 border-2 border-rose-500/70 shadow-lg shadow-rose-500/10';
                 } else if (prod.comboPromoActive) {
@@ -1734,7 +1802,7 @@
                 const cant = carrito[id] || 0;
                 if (cant > 0) {
                     const p = catalogMap.find(x => String(x.id) === String(id));
-                    const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '' };
+                    const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '', cumpleIncentivo: false };
                     subtotalBruto += calc.subtotal;
                     comisionBruta += calc.comisionTotal;
                     let nombreEtiqueta = 'Vol.';
@@ -1744,13 +1812,17 @@
                     const etiquetaDesc = calc.aplicaDescuento
                         ? `<span class="text-emerald-400 font-bold ml-1">(-${calc.discPct}% ${nombreEtiqueta})</span>`
                         : '';
+                    const etiquetaInc = (p && calc.cumpleIncentivo)
+                        ? `<span class="text-indigo-300 font-bold ml-1">[🎯 Plus +${p.incPlusPct}% Com.]</span>`
+                        : '';
+
                     itemsHtml += `
                         <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800 text-xs">
                             <div>
                                 <strong class="text-white block">${p ? p.nombre : 'Artículo'}</strong>
                                 <span class="text-[10px] text-slate-400 font-mono">
                                     ${cant} un. x ${fmtMoneda(calc.pvpUnitario)}
-                                    ${etiquetaDesc}
+                                    ${etiquetaDesc} ${etiquetaInc}
                                 </span>
                             </div>
                             <span class="font-mono font-bold text-emerald-400">${fmtMoneda(calc.subtotal)}</span>
@@ -1836,7 +1908,7 @@
                 const cant = Number(carrito[id]) || 0;
                 if (cant > 0) {
                     const p = catalogMap.find(x => String(x.id) === String(id));
-                    const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '' };
+                    const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '', cumpleIncentivo: false, comisionEfectivaPct: 0 };
                     let tagTipo = 'Promo';
                     if (calc.tipoDescuento === 'MIX') tagTipo = 'Mix';
                     if (calc.tipoDescuento === 'COMBO') tagTipo = 'Combo';
@@ -1852,6 +1924,8 @@
                         precio_unitario: calc.pvpUnitario,
                         subtotal: calc.subtotal,
                         comision: calc.comisionTotal,
+                        comision_pct_aplicado: calc.comisionEfectivaPct || 0,
+                        incentivo_vendedor_activo: Boolean(calc.cumpleIncentivo),
                         descuento_pct: calc.discPct || 0
                     });
                     subtotalBruto += calc.subtotal;
