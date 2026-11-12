@@ -105,6 +105,23 @@
         </header>
 
         <main class="max-w-md mx-auto w-full p-4 space-y-4 flex-1">
+            <!-- BANNER DE MODO EDICIÓN EN CATÁLOGO PRINCIPAL -->
+            <div id="bannerModoEdicionCatalogo" class="hidden bg-amber-500/20 border-2 border-amber-400 rounded-2xl p-3.5 shadow-lg space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-pen-to-square text-amber-400 text-sm"></i>
+                        <div>
+                            <span class="text-[10px] font-black uppercase text-amber-300 block">Editando Pedido Cargado</span>
+                            <strong id="lblNombreClienteEditando" class="text-xs text-white font-black">-</strong>
+                        </div>
+                    </div>
+                    <button onclick="cancelarModoEdicionCatalogo()" class="bg-slate-900 hover:bg-slate-800 text-rose-300 border border-rose-500/40 text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg cursor-pointer">
+                        ✕ Salir sin guardar
+                    </button>
+                </div>
+                <p class="text-[11px] text-amber-200">Sumá o quitá productos en la lista de abajo y tocá <strong>"Guardar Cambios"</strong> en la barra inferior.</p>
+            </div>
+
             <!-- RENDIMIENTO SEMANAL -->
             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
                 <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
@@ -124,6 +141,36 @@
                         <div id="kpiComisionSemanal" class="text-xl font-mono font-black text-emerald-400 mt-0.5">$ 0</div>
                         <span id="kpiPctComisionProm" class="text-[10px] text-slate-500 block">0% prom.</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- MIS PEDIDOS CARGADOS (VER Y EDITAR PEDIDOS DE CLIENTES) -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3">
+                <div class="flex items-center justify-between cursor-pointer" onclick="toggleAcordeonMisPedidos()">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-black uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-clipboard-list"></i> MIS PEDIDOS CARGADOS
+                        </span>
+                        <span id="badgeCantMisPedidosList" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">0</span>
+                    </div>
+                    <button type="button" id="btnToggleMisPedidos" class="text-[11px] font-bold text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer">
+                        <span id="lblToggleMisPedidos">Ver / Editar</span>
+                        <i id="iconToggleMisPedidos" class="fa-solid fa-chevron-down text-[10px] transition-transform"></i>
+                    </button>
+                </div>
+
+                <div id="cuerpoMisPedidosCargados" class="space-y-2.5 pt-1 border-t border-slate-800/80">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-[11px] text-slate-500"></i>
+                        <input 
+                            type="text" 
+                            id="inputBuscarPedidoCargado" 
+                            placeholder="Filtrar pedido por nombre de cliente..." 
+                            oninput="renderMisPedidosCargados()"
+                            class="input-mobile w-full pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none"
+                        >
+                    </div>
+                    <div id="listaMisPedidosContenedor" class="space-y-2 max-h-60 overflow-y-auto pr-0.5"></div>
                 </div>
             </div>
 
@@ -205,6 +252,88 @@
         </div>
     </div>
 
+    <!-- MODAL VER Y EDITAR PEDIDO EXISTENTE DE UN CLIENTE -->
+    <div id="modalDetalleEditarPedido" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-2.5">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-4 space-y-3.5 shadow-2xl max-h-[94vh] flex flex-col">
+            <!-- Encabezado del Modal -->
+            <div class="flex justify-between items-start border-b border-slate-800 pb-2.5">
+                <div>
+                    <span class="text-[10px] font-black uppercase text-cyan-400 flex items-center gap-1">
+                        <i class="fa-solid fa-pen-to-square"></i> Pedido Cargado • Edición en Vivo
+                    </span>
+                    <h3 id="editModalClienteNombre" class="text-sm font-black uppercase text-white mt-0.5">-</h3>
+                    <span id="editModalClienteFecha" class="text-[10px] text-slate-400 block">-</span>
+                </div>
+                <button onclick="cerrarModalEditarPedido()" class="text-slate-400 hover:text-white p-1 cursor-pointer">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Cartel grande de Total en Vivo (para dictarle al cliente por teléfono) -->
+            <div class="bg-slate-950 border-2 border-emerald-500/50 rounded-xl p-3 space-y-1 shadow-inner">
+                <div id="editModalDesgloseTicket" class="hidden text-[11px] space-y-0.5 pb-1 border-b border-slate-800"></div>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] font-black uppercase text-slate-400 block">IMPORTE TOTAL ACTUALIZADO</span>
+                        <span id="editModalBultosCount" class="text-[11px] text-cyan-300 font-bold">0 bultos</span>
+                    </div>
+                    <div class="text-right">
+                        <span id="editModalTotalImporte" class="text-2xl font-mono font-black text-emerald-400">$ 0</span>
+                        <span id="editModalComisionImporte" class="block text-[10px] font-mono text-slate-400">Mi comisión: $ 0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de Productos del Pedido con + / - en vivo -->
+            <div class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[140px]" id="editModalItemsContenedor"></div>
+
+            <!-- Buscador rápido para agregar otro artículo sin salir del modal -->
+            <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-black uppercase text-amber-400 flex items-center gap-1">
+                        <i class="fa-solid fa-cart-plus"></i> + Agregar otro artículo a este pedido
+                    </span>
+                    <button type="button" onclick="pasarPedidoAlCatalogoPrincipal()" class="text-[10px] font-bold text-cyan-400 hover:underline cursor-pointer">
+                        Ir al Catálogo Completo ➔
+                    </button>
+                </div>
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-xs text-slate-400"></i>
+                    <input 
+                        type="text" 
+                        id="inputBuscarAgregarEnModal" 
+                        placeholder="Escribí para buscar y sumar un producto..." 
+                        oninput="filtrarProductosParaSumarEnModal(this.value)"
+                        class="input-mobile w-full pl-8 pr-7 py-1.5 text-xs text-white placeholder-slate-500 outline-none"
+                    >
+                </div>
+                <div id="listaResultadosAgregarEnModal" class="hidden max-h-36 overflow-y-auto space-y-1.5 pt-1"></div>
+            </div>
+
+            <!-- Fecha de entrega y observación -->
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800">
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Fecha Entrega:</label>
+                    <input type="date" id="editModalFechaEntrega" class="input-mobile w-full p-2 text-xs font-mono text-white outline-none">
+                </div>
+                <div>
+                    <label class="block text-[9px] font-bold text-slate-400 uppercase mb-0.5">Observación:</label>
+                    <input type="text" id="editModalObservacion" placeholder="Nota..." class="input-mobile w-full p-2 text-xs text-white outline-none">
+                </div>
+            </div>
+
+            <!-- Botones de Acción -->
+            <div class="grid grid-cols-2 gap-2 pt-1">
+                <button onclick="cerrarModalEditarPedido()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">
+                    Cerrar
+                </button>
+                <button id="btnGuardarPedidoEditadoModal" onclick="guardarCambiosPedidoDesdeModal()" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- BARRA INFERIOR CON PROGRESO DE FACTURACIÓN -->
     <div id="barraFlotantePedido" class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-3 z-40">
         <div class="max-w-md mx-auto space-y-2">
@@ -220,7 +349,7 @@
                     </div>
                 </div>
                 <button onclick="abrirResumenPedidoModal()" id="btnVerPedido" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase px-5 py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5">
-                    <i class="fa-solid fa-paper-plane"></i> Enviar
+                    <i class="fa-solid fa-paper-plane"></i> <span id="lblBtnVerPedidoTexto">Enviar</span>
                 </button>
             </div>
         </div>
@@ -230,7 +359,7 @@
     <div id="modalResumenPedido" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-3">
         <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 class="text-sm font-black uppercase text-white flex items-center gap-2">
+                <h3 id="tituloModalResumenPedido" class="text-sm font-black uppercase text-white flex items-center gap-2">
                     <i class="fa-solid fa-receipt text-emerald-400"></i> Resumen del Pedido
                 </h3>
                 <button onclick="cerrarResumenPedidoModal()" class="text-slate-400 hover:text-white p-1 cursor-pointer"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -264,7 +393,7 @@
 
             <div class="grid grid-cols-2 gap-2 pt-2">
                 <button onclick="cerrarResumenPedidoModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">Seguir Cargando</button>
-                <button onclick="confirmarYGuardarPedido()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer">Confirmar Pedido</button>
+                <button id="btnConfirmarResumenModal" onclick="confirmarYGuardarPedido()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer">Confirmar Pedido</button>
             </div>
         </div>
     </div>
@@ -329,6 +458,15 @@
         let carrito = {};
         let soloPromosActivas = false;
         let archivoPDFListoParaCompartir = null;
+
+        // Variables para editar un pedido existente
+        let pedidoEditandoModalId = null;
+        let carritoEdicionModal = {};
+        let cantOriginalEdicionModal = {};
+
+        let pedidoEditandoCatalogoId = null;
+        let cantOriginalEdicionCatalogo = {};
+        let acordeonMisPedidosAbierto = true;
 
         function esVendedorValidoPreventa(nombre) {
             if (!nombre) return false;
@@ -400,6 +538,19 @@
             return isNaN(d.getTime()) ? new Date() : d;
         }
 
+        function formatearFechaHoraCorta(fechaStr) {
+            if (!fechaStr) return '';
+            const raw = String(fechaStr).trim();
+            if (raw.includes('T')) {
+                const partes = raw.split('T');
+                const f = partes[0].split('-');
+                const h = (partes[1] || '').slice(0, 5);
+                if (f.length === 3) return `${f[2]}/${f[1]} ${h}hs`;
+            }
+            const d = parseFechaPedido(fechaStr);
+            return d.toLocaleDateString('es-AR');
+        }
+
         // --- PUNTO 5: LECTOR DE ESCALERA DE PREMIOS POR FACTURACIÓN TOTAL ---
         function obtenerEscalonesFacturacionActivos() {
             let tiers = [];
@@ -458,26 +609,23 @@
             };
         }
 
-        // --- LECTOR DE PRODUCTO Y REGLAS (PUNTOS 1 AL 6: VOLUMEN, MIX, COMBO, REGALO $0 E INCENTIVO VENDEDOR) ---
+        // --- LECTOR DE PRODUCTO Y REGLAS (PUNTOS 1 AL 6) ---
         function obtenerDatosProducto(p) {
             const id = String(p.id || p.codigo || p.sku || Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
             const stock = !isNaN(Number(p.stock)) ? Number(p.stock) : 0;
             
-            // Punto 1: Volumen
             const volPromoActive = Boolean(p.volPromoActive && Number(p.volMinQty) > 0 && Number(p.volDiscPct) > 0);
             const volMinQty = Number(p.volMinQty) || 0;
             const volDiscPct = Number(p.volDiscPct) || 0;
 
-            // Punto 2: Mix Cruzado
             const mixPromoActive = Boolean(p.mixPromoActive && p.mixTriggerId && Number(p.mixTriggerQty) > 0 && Number(p.mixDiscPct) > 0);
             const mixTriggerId = p.mixTriggerId ? String(p.mixTriggerId) : '';
             const mixTriggerName = p.mixTriggerName || 'Producto Gancho';
             const mixTriggerQty = Number(p.mixTriggerQty) || 0;
             const mixDiscPct = Number(p.mixDiscPct) || 0;
 
-            // Punto 3: Combo Multi-artículo
             const comboPromoActive = Boolean(p.comboPromoActive && p.comboId && Array.isArray(p.comboMemberIds) && p.comboMemberIds.length >= 2 && Number(p.comboDiscPct) > 0);
             const comboId = p.comboId ? String(p.comboId) : '';
             const comboName = p.comboName || 'Combo Lanzamiento';
@@ -486,14 +634,12 @@
             const comboMemberIds = Array.isArray(p.comboMemberIds) ? p.comboMemberIds.map(String) : [];
             const comboMemberNames = Array.isArray(p.comboMemberNames) ? p.comboMemberNames : [];
 
-            // Punto 4: Regalo sin cargo ($0)
             const giftPromoActive = Boolean(p.giftPromoActive && p.giftRewardId && Number(p.giftTriggerQty) > 0 && Number(p.giftRewardQty) > 0);
             const giftTriggerQty = Math.max(1, Number(p.giftTriggerQty) || 1);
             const giftRewardId = p.giftRewardId ? String(p.giftRewardId) : '';
             const giftRewardName = p.giftRewardName || 'Artículo de Regalo';
             const giftRewardQty = Math.max(1, Number(p.giftRewardQty) || 1);
 
-            // Punto 6: Incentivo de Comisión por Vendedor (Plus de comisión en artículos seleccionados)
             const rawIncActive = Boolean(p.incPromoActive || p.sellerIncActive || p.incentiveActive || p.commPromoActive || p.plusComisionActive);
             const rawIncPlusPct = Number(p.incPlusPct || p.sellerIncPct || p.incentivePlusPct || p.commPlusPct || p.plusComisionPct || p.extraSellerPct || 0);
             const incMinQty = Math.max(1, Number(p.incMinQty || p.sellerIncMinQty || p.incentiveMinQty || p.commMinQty || 1));
@@ -506,9 +652,7 @@
             const incPromoActive = Boolean(rawIncActive && rawIncPlusPct > 0 && aplicaAEsteVendedor);
             const incPlusPct = incPromoActive ? rawIncPlusPct : 0;
 
-            // Promo para el cliente (usada en el PDF de Lista de Precios)
             const isCustomerPromo = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive || comboPromoActive || giftPromoActive);
-            // Destacado en la app del preventista (incluye incentivos de comisión)
             const isFeatured = Boolean(isCustomerPromo || incPromoActive);
 
             let promoText = isCustomerPromo ? String(p.promoText || '').trim() : '';
@@ -541,18 +685,19 @@
         }
 
         // --- MOTOR AUTOMÁTICO DE PRECIO, REGALOS SIN CARGO E INCENTIVO DE COMISIÓN ---
-        function calcularPrecioSegunCantidad(p, cantidad) {
+        function calcularPrecioSegunCantidad(p, cantidad, customCarrito) {
+            const mapaCarro = customCarrito || carrito;
             const cant = Number(cantidad) || 0;
 
             const cumpleVolumen = Boolean(p.volPromoActive && p.volMinQty > 0 && p.volDiscPct > 0 && cant >= p.volMinQty);
-            const cantGanchoEnCarrito = p.mixTriggerId ? (Number(carrito[p.mixTriggerId]) || 0) : 0;
+            const cantGanchoEnCarrito = p.mixTriggerId ? (Number(mapaCarro[p.mixTriggerId]) || 0) : 0;
             const cumpleMix = Boolean(p.mixPromoActive && p.mixTriggerId && p.mixTriggerQty > 0 && p.mixDiscPct > 0 && cantGanchoEnCarrito >= p.mixTriggerQty);
 
             let cumpleCombo = false;
             let faltantesComboCount = 0;
             if (p.comboPromoActive && p.comboMemberIds.length >= 2) {
                 p.comboMemberIds.forEach(mId => {
-                    const cEnCarro = Number(carrito[mId]) || 0;
+                    const cEnCarro = Number(mapaCarro[mId]) || 0;
                     if (cEnCarro < p.comboMinQty) {
                         faltantesComboCount++;
                     }
@@ -584,7 +729,6 @@
             const aplicaDescuento = (discPct > 0);
             const pvpUnitario = aplicaDescuento ? Math.round(p.pvp * (1 - (discPct / 100))) : p.pvp;
 
-            // Evaluación de Incentivo de Comisión por Vendedor (Punto 6)
             const cumpleIncentivo = Boolean(p.incPromoActive && p.incPlusPct > 0 && (cant >= p.incMinQty || (cant === 0 && p.incMinQty <= 1)));
             const comisionEfectivaPct = p.comisionBasePct + (cumpleIncentivo ? p.incPlusPct : 0);
             const comisionUnitaria = pvpUnitario > 0 ? (pvpUnitario * (comisionEfectivaPct / 100)) : 0;
@@ -613,10 +757,11 @@
             };
         }
 
-        function obtenerRegalosActivosDelCarrito(catalogMap) {
+        function obtenerRegalosActivosDelCarrito(catalogMap, customCarrito) {
+            const mapaCarro = customCarrito || carrito;
             const regalosAgrupados = {};
-            Object.keys(carrito).forEach(id => {
-                const cant = Number(carrito[id]) || 0;
+            Object.keys(mapaCarro).forEach(id => {
+                const cant = Number(mapaCarro[id]) || 0;
                 if (cant > 0) {
                     const p = catalogMap.find(x => String(x.id) === String(id));
                     if (p && p.giftPromoActive && p.giftRewardId && cant >= p.giftTriggerQty) {
@@ -638,6 +783,609 @@
                 }
             });
             return Object.values(regalosAgrupados);
+        }
+
+        // --- FUNCIONES DE EXTRACCIÓN Y NORMALIZACIÓN DE PEDIDOS CARGADOS ---
+        function obtenerNombreClienteDePedido(ped) {
+            if (!ped) return 'Cliente';
+            if (ped.cliente && (ped.cliente.nombre || ped.cliente.name)) return String(ped.cliente.nombre || ped.cliente.name);
+            if (ped.clientName) return String(ped.clientName);
+            if (ped.clienteNombre) return String(ped.clienteNombre);
+            return 'Cliente';
+        }
+
+        function obtenerDireccionClienteDePedido(ped) {
+            if (!ped) return '';
+            let raw = '';
+            if (ped.cliente && (ped.cliente.direccion || ped.cliente.addr)) raw = String(ped.cliente.direccion || ped.cliente.addr);
+            else if (ped.clientAddr || ped.direccion) raw = String(ped.clientAddr || ped.direccion);
+            return raw.includes('|||') ? raw.split('|||')[0].trim() : raw.trim();
+        }
+
+        function extraerMapaCantidadesDePedido(ped) {
+            const mapa = {};
+            if (!ped || !Array.isArray(ped.items)) return mapa;
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+
+            ped.items.forEach(it => {
+                const idProd = String(it.id_producto || it.productId || it.id || '');
+                const desc = String(it.descripcion || it.name || '');
+                const precio = Number(it.precio_unitario !== undefined ? it.precio_unitario : it.price);
+                const cant = Number(it.cantidad !== undefined ? it.cantidad : it.qty) || 0;
+
+                if (idProd === 'PROMO_TICKET_DESCUENTO' || precio < 0) return;
+                if (desc.includes('[SIN CARGO / REGALO]') || (precio === 0 && Number(it.descuento_pct) === 100)) return;
+                if (cant <= 0) return;
+
+                let prodMatch = catalogMap.find(x => String(x.id) === idProd);
+                if (!prodMatch && desc) {
+                    const descLimpia = desc.split('[')[0].trim().toLowerCase();
+                    prodMatch = catalogMap.find(x => x.nombre.toLowerCase().trim() === descLimpia);
+                }
+
+                const keyFinal = prodMatch ? String(prodMatch.id) : idProd;
+                if (keyFinal) {
+                    mapa[keyFinal] = (mapa[keyFinal] || 0) + cant;
+                }
+            });
+            return mapa;
+        }
+
+        function toggleAcordeonMisPedidos() {
+            acordeonMisPedidosAbierto = !acordeonMisPedidosAbierto;
+            const body = document.getElementById('cuerpoMisPedidosCargados');
+            const icon = document.getElementById('iconToggleMisPedidos');
+            if (body) {
+                if (acordeonMisPedidosAbierto) body.classList.remove('hidden');
+                else body.classList.add('hidden');
+            }
+            if (icon) {
+                icon.style.transform = acordeonMisPedidosAbierto ? 'rotate(0deg)' : 'rotate(-90deg)';
+            }
+        }
+
+        function renderMisPedidosCargados() {
+            const cont = document.getElementById('listaMisPedidosContenedor');
+            const badge = document.getElementById('badgeCantMisPedidosList');
+            if (!cont) return;
+
+            const vendedorActual = (DB.vendedorActivo || '').toLowerCase().trim();
+            const inicioCiclo = obtenerInicioSemanaComercialActual();
+            const q = (document.getElementById('inputBuscarPedidoCargado')?.value || '').trim().toLowerCase();
+
+            const misPedidos = (DB.pedidosSemana || []).filter(p => {
+                const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
+                const fechaObj = parseFechaPedido(p.fecha || p.date);
+                return (vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) && fechaObj >= inicioCiclo;
+            });
+
+            if (badge) badge.textContent = misPedidos.length;
+
+            const filtrados = misPedidos.filter(p => {
+                if (!q) return true;
+                const nomCli = obtenerNombreClienteDePedido(p).toLowerCase();
+                return nomCli.includes(q);
+            });
+
+            filtrados.sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+
+            if (filtrados.length === 0) {
+                cont.innerHTML = `
+                    <div class="p-4 text-center text-slate-500 text-xs italic bg-slate-950/60 rounded-xl border border-slate-800/80">
+                        ${misPedidos.length === 0 ? 'Todavía no cargaste pedidos en esta semana.' : 'No se encontraron pedidos de ese cliente.'}
+                    </div>
+                `;
+                return;
+            }
+
+            cont.innerHTML = filtrados.map(ped => {
+                const nomCli = obtenerNombreClienteDePedido(ped);
+                const dirCli = obtenerDireccionClienteDePedido(ped);
+                const total = Number(ped.total_venta !== undefined ? ped.total_venta : ped.total) || 0;
+                const mapaCant = extraerMapaCantidadesDePedido(ped);
+                const totalBultos = Object.values(mapaCant).reduce((acc, n) => acc + (Number(n) || 0), 0);
+                const fechaTxt = formatearFechaHoraCorta(ped.fecha || ped.date);
+
+                return `
+                    <div onclick="abrirModalEditarPedido('${ped.id}')" class="bg-slate-950 hover:bg-slate-900/90 active:scale-[0.99] border border-slate-800 hover:border-cyan-500/50 rounded-xl p-3 flex items-center justify-between gap-2.5 cursor-pointer transition shadow">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <strong class="text-xs font-black text-white truncate">${nomCli}</strong>
+                                ${ped.editado_preventa ? `<span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">Editado</span>` : ''}
+                            </div>
+                            <span class="text-[10px] text-slate-400 block truncate">
+                                ${totalBultos} bultos ${dirCli ? `• ${dirCli}` : ''} ${fechaTxt ? `• ${fechaTxt}` : ''}
+                            </span>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <span class="text-sm font-mono font-black text-emerald-400 block">${fmtMoneda(total)}</span>
+                            <span class="inline-flex items-center gap-1 text-[10px] font-extrabold text-cyan-400">
+                                <i class="fa-solid fa-pen-to-square"></i> Ver / Sumar
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // --- MODAL DE EDICIÓN EN VIVO DE UN PEDIDO CARGADO ---
+        function abrirModalEditarPedido(pedidoId) {
+            const ped = (DB.pedidosSemana || []).find(p => String(p.id) === String(pedidoId));
+            if (!ped) {
+                alert('No se encontró el pedido.');
+                return;
+            }
+
+            pedidoEditandoModalId = String(ped.id);
+            carritoEdicionModal = extraerMapaCantidadesDePedido(ped);
+            cantOriginalEdicionModal = Object.assign({}, carritoEdicionModal);
+
+            document.getElementById('editModalClienteNombre').textContent = obtenerNombreClienteDePedido(ped);
+            const dir = obtenerDireccionClienteDePedido(ped);
+            const fHora = formatearFechaHoraCorta(ped.fecha || ped.date);
+            document.getElementById('editModalClienteFecha').textContent = `${dir ? dir + ' • ' : ''}Cargado: ${fHora || 'Esta semana'}`;
+
+            const nowLocal = new Date();
+            nowLocal.setMinutes(nowLocal.getMinutes() - nowLocal.getTimezoneOffset());
+            document.getElementById('editModalFechaEntrega').value = ped.fecha_entrega || ped.deliveryDate || nowLocal.toISOString().slice(0, 10);
+            document.getElementById('editModalObservacion').value = ped.observacion || ped.obs || '';
+
+            document.getElementById('inputBuscarAgregarEnModal').value = '';
+            document.getElementById('listaResultadosAgregarEnModal').classList.add('hidden');
+
+            renderContenidoModalEditarPedido();
+            document.getElementById('modalDetalleEditarPedido').classList.remove('hidden');
+        }
+
+        function cerrarModalEditarPedido() {
+            pedidoEditandoModalId = null;
+            carritoEdicionModal = {};
+            cantOriginalEdicionModal = {};
+            document.getElementById('modalDetalleEditarPedido').classList.add('hidden');
+        }
+
+        function renderContenidoModalEditarPedido() {
+            const cont = document.getElementById('editModalItemsContenedor');
+            if (!cont) return;
+
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+            const idsActivos = Object.keys(carritoEdicionModal).filter(id => (Number(carritoEdicionModal[id]) || 0) > 0);
+
+            let subtotalBruto = 0;
+            let comisionBruta = 0;
+            let totalBultos = 0;
+            let htmlItems = '';
+
+            idsActivos.forEach(id => {
+                const cant = Number(carritoEdicionModal[id]) || 0;
+                const p = catalogMap.find(x => String(x.id) === String(id));
+                if (!p) return;
+
+                const calc = calcularPrecioSegunCantidad(p, cant, carritoEdicionModal);
+                subtotalBruto += calc.subtotal;
+                comisionBruta += calc.comisionTotal;
+                totalBultos += cant;
+
+                let tagPromo = '';
+                if (calc.aplicaDescuento) {
+                    let tipoNom = 'Vol.';
+                    if (calc.tipoDescuento === 'MIX') tipoNom = 'Mix';
+                    if (calc.tipoDescuento === 'COMBO') tipoNom = 'Combo';
+                    tagPromo = `<span class="text-emerald-400 font-bold ml-1">(-${calc.discPct}% ${tipoNom})</span>`;
+                }
+
+                htmlItems += `
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <strong class="text-xs font-extrabold text-white leading-snug break-words block">${p.nombre}</strong>
+                            <span class="text-[10px] text-slate-400 font-mono block mt-0.5">
+                                ${fmtMoneda(calc.pvpUnitario)} c/u ${tagPromo}
+                            </span>
+                            <span class="text-xs font-mono font-black text-emerald-400 block mt-0.5">
+                                Subtotal: ${fmtMoneda(calc.subtotal)}
+                            </span>
+                        </div>
+                        <div class="flex items-center bg-slate-900 border border-slate-700 rounded-xl p-1 gap-1 flex-shrink-0">
+                            <button type="button" onclick="modificarCantEnModalEdicion('${p.id}', -1)" class="w-8 h-8 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-white font-black text-sm flex items-center justify-center cursor-pointer">-</button>
+                            <input 
+                                type="number" 
+                                value="${cant}" 
+                                min="0"
+                                oninput="setearCantDirectaEnModalEdicion('${p.id}', this.value)"
+                                class="w-10 text-center font-mono font-bold text-xs bg-transparent text-emerald-400 outline-none"
+                            >
+                            <button type="button" onclick="modificarCantEnModalEdicion('${p.id}', 1)" class="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 font-black text-sm flex items-center justify-center cursor-pointer">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            const regalosList = obtenerRegalosActivosDelCarrito(catalogMap, carritoEdicionModal);
+            regalosList.forEach(reg => {
+                htmlItems += `
+                    <div class="bg-rose-950/30 border border-rose-500/40 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                        <div>
+                            <strong class="text-rose-200 block">🎁 ${reg.rewardName}</strong>
+                            <span class="text-[10px] text-rose-300 font-mono">${reg.cantidad} un. SIN CARGO (${reg.motivo})</span>
+                        </div>
+                        <span class="font-mono font-black text-emerald-400">$ 0</span>
+                    </div>
+                `;
+            });
+
+            if (idsActivos.length === 0) {
+                htmlItems = `
+                    <div class="p-6 text-center text-slate-500 text-xs italic border border-slate-800 rounded-xl">
+                        Quitaste todos los artículos. Usá el buscador de abajo para agregar productos al pedido.
+                    </div>
+                `;
+            }
+
+            cont.innerHTML = htmlItems;
+
+            const evalTicket = evaluarEscaleraFacturacion(subtotalBruto, comisionBruta);
+            const desgloseBox = document.getElementById('editModalDesgloseTicket');
+            if (desgloseBox) {
+                if (evalTicket.descuentoMonto > 0 && evalTicket.tierAlcanzado) {
+                    desgloseBox.classList.remove('hidden');
+                    desgloseBox.innerHTML = `
+                        <div class="flex justify-between text-slate-400">
+                            <span>Subtotal Artículos:</span>
+                            <span class="font-mono">${fmtMoneda(evalTicket.subtotalBruto)}</span>
+                        </div>
+                        <div class="flex justify-between text-amber-300 font-bold">
+                            <span>🏆 Premio Facturación (-${evalTicket.discPct}% OFF):</span>
+                            <span class="font-mono">-${fmtMoneda(evalTicket.descuentoMonto)}</span>
+                        </div>
+                    `;
+                } else if (evalTicket.proximoTier && totalBultos > 0) {
+                    desgloseBox.classList.remove('hidden');
+                    desgloseBox.innerHTML = `
+                        <div class="text-amber-300 font-bold text-[10px]">
+                            🏆 Sumando <strong>${fmtMoneda(evalTicket.faltaParaProximo)}</strong> más activa <strong>-${evalTicket.proximoTier.discPct}% OFF General</strong>
+                        </div>
+                    `;
+                } else {
+                    desgloseBox.classList.add('hidden');
+                    desgloseBox.innerHTML = '';
+                }
+            }
+
+            const totalRegalos = regalosList.reduce((acc, g) => acc + g.cantidad, 0);
+            document.getElementById('editModalBultosCount').textContent = totalRegalos > 0
+                ? `${totalBultos} bultos (+${totalRegalos} de regalo 🎁)`
+                : `${totalBultos} bultos`;
+            document.getElementById('editModalTotalImporte').textContent = fmtMoneda(evalTicket.totalFinal);
+            document.getElementById('editModalComisionImporte').textContent = `Mi comisión: ${fmtMoneda(evalTicket.comisionFinal)}`;
+        }
+
+        function modificarCantEnModalEdicion(prodId, delta) {
+            const cur = Number(carritoEdicionModal[prodId]) || 0;
+            const next = cur + delta;
+            if (next <= 0) {
+                delete carritoEdicionModal[prodId];
+            } else {
+                carritoEdicionModal[prodId] = next;
+            }
+            renderContenidoModalEditarPedido();
+        }
+
+        function setearCantDirectaEnModalEdicion(prodId, val) {
+            const next = Math.max(0, parseInt(val, 10) || 0);
+            if (next <= 0) {
+                delete carritoEdicionModal[prodId];
+            } else {
+                carritoEdicionModal[prodId] = next;
+            }
+            renderContenidoModalEditarPedido();
+        }
+
+        function filtrarProductosParaSumarEnModal(query) {
+            const box = document.getElementById('listaResultadosAgregarEnModal');
+            if (!box) return;
+            const q = (query || '').trim().toLowerCase();
+            if (!q) {
+                box.classList.add('hidden');
+                box.innerHTML = '';
+                return;
+            }
+
+            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            const matches = prods.filter(p => p.nombre.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q)).slice(0, 12);
+
+            box.classList.remove('hidden');
+            if (matches.length === 0) {
+                box.innerHTML = `<div class="p-2 text-center text-[11px] text-slate-500 italic">No se encontraron productos con "${query}".</div>`;
+                return;
+            }
+
+            box.innerHTML = matches.map(p => {
+                const enPedido = Number(carritoEdicionModal[p.id]) || 0;
+                return `
+                    <div class="flex items-center justify-between bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs">
+                        <div class="min-w-0 pr-2 flex-1">
+                            <strong class="text-white block leading-tight break-words">${p.nombre}</strong>
+                            <span class="text-[10px] text-emerald-400 font-mono font-bold">${fmtMoneda(p.pvp)}</span>
+                            <span class="text-[10px] text-slate-500"> • Stock: ${p.stock}</span>
+                        </div>
+                        <button type="button" onclick="sumarProductoDesdeBuscadorModal('${p.id}')" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-[10px] uppercase px-2.5 py-1.5 rounded-lg flex-shrink-0 cursor-pointer">
+                            + Sumar ${enPedido > 0 ? `(${enPedido})` : ''}
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function sumarProductoDesdeBuscadorModal(prodId) {
+            carritoEdicionModal[prodId] = (Number(carritoEdicionModal[prodId]) || 0) + 1;
+            renderContenidoModalEditarPedido();
+            const q = document.getElementById('inputBuscarAgregarEnModal')?.value || '';
+            if (q) filtrarProductosParaSumarEnModal(q);
+        }
+
+        function pasarPedidoAlCatalogoPrincipal() {
+            if (!pedidoEditandoModalId) return;
+            const ped = (DB.pedidosSemana || []).find(p => String(p.id) === String(pedidoEditandoModalId));
+            if (!ped) return;
+
+            pedidoEditandoCatalogoId = String(ped.id);
+            cantOriginalEdicionCatalogo = Object.assign({}, cantOriginalEdicionModal);
+            carrito = Object.assign({}, carritoEdicionModal);
+
+            // Seleccionar cliente en el dropdown
+            const selCli = document.getElementById('selCliente');
+            const cliId = (ped.cliente && ped.cliente.id) ? String(ped.cliente.id) : String(ped.clientId || '');
+            if (selCli && cliId) {
+                if (!Array.from(selCli.options).some(o => String(o.value) === cliId)) {
+                    const opt = document.createElement('option');
+                    opt.value = cliId;
+                    opt.textContent = obtenerNombreClienteDePedido(ped);
+                    selCli.appendChild(opt);
+                }
+                selCli.value = cliId;
+            }
+
+            document.getElementById('lblNombreClienteEditando').textContent = obtenerNombreClienteDePedido(ped);
+            document.getElementById('bannerModoEdicionCatalogo').classList.remove('hidden');
+            document.getElementById('lblBtnVerPedidoTexto').textContent = 'Guardar Cambios';
+
+            cerrarModalEditarPedido();
+            renderCatalogo(document.getElementById('inputBuscarProd').value);
+            actualizarBarraCarrito();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function cancelarModoEdicionCatalogo() {
+            pedidoEditandoCatalogoId = null;
+            cantOriginalEdicionCatalogo = {};
+            carrito = {};
+            document.getElementById('bannerModoEdicionCatalogo').classList.add('hidden');
+            document.getElementById('lblBtnVerPedidoTexto').textContent = 'Enviar';
+            renderCatalogo(document.getElementById('inputBuscarProd').value);
+            actualizarBarraCarrito();
+        }
+
+        async function guardarCambiosPedidoDesdeModal() {
+            if (!pedidoEditandoModalId) return;
+            const idsActivos = Object.keys(carritoEdicionModal).filter(id => (Number(carritoEdicionModal[id]) || 0) > 0);
+            if (idsActivos.length === 0) {
+                alert('El pedido debe tener al menos 1 producto cargado.');
+                return;
+            }
+
+            const btn = document.getElementById('btnGuardarPedidoEditadoModal');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> Guardando...';
+            }
+
+            try {
+                const fechaEnt = document.getElementById('editModalFechaEntrega')?.value || '';
+                const obs = (document.getElementById('editModalObservacion')?.value || '').trim();
+                await ejecutarActualizacionPedidoExistente(pedidoEditandoModalId, carritoEdicionModal, cantOriginalEdicionModal, fechaEnt, obs);
+                cerrarModalEditarPedido();
+                alert('✅ ¡Pedido modificado y actualizado con éxito!');
+            } catch (err) {
+                alert('Error al actualizar el pedido: ' + (err.message || err));
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        }
+
+        async function ejecutarActualizacionPedidoExistente(orderId, nuevoMapaCarrito, mapaCantOriginal, nuevaFechaEntrega, nuevaObs) {
+            const pedOriginal = (DB.pedidosSemana || []).find(p => String(p.id) === String(orderId));
+            if (!pedOriginal) throw new Error('No se encontró el pedido original.');
+
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+            let itemsPedido = [], subtotalBruto = 0, comisionBruta = 0;
+
+            // 1. Calcular diferencias de stock respecto al pedido original (incluyendo regalos previos y nuevos)
+            const regalosOriginales = obtenerRegalosActivosDelCarrito(catalogMap, mapaCantOriginal);
+            const regalosNuevos = obtenerRegalosActivosDelCarrito(catalogMap, nuevoMapaCarrito);
+
+            const stockDeltaPorProducto = {};
+            const todosIdsToc = new Set([...Object.keys(mapaCantOriginal), ...Object.keys(nuevoMapaCarrito)]);
+            todosIdsToc.forEach(id => {
+                const antes = Number(mapaCantOriginal[id]) || 0;
+                const ahora = Number(nuevoMapaCarrito[id]) || 0;
+                const diff = ahora - antes;
+                if (diff !== 0) {
+                    stockDeltaPorProducto[String(id)] = (stockDeltaPorProducto[String(id)] || 0) + diff;
+                }
+            });
+
+            regalosOriginales.forEach(r => {
+                stockDeltaPorProducto[String(r.rewardId)] = (stockDeltaPorProducto[String(r.rewardId)] || 0) - (Number(r.cantidad) || 0);
+            });
+            regalosNuevos.forEach(r => {
+                stockDeltaPorProducto[String(r.rewardId)] = (stockDeltaPorProducto[String(r.rewardId)] || 0) + (Number(r.cantidad) || 0);
+            });
+
+            // Aplicar diferencia de stock en catálogo local
+            Object.keys(stockDeltaPorProducto).forEach(idProd => {
+                const delta = stockDeltaPorProducto[idProd];
+                if (delta !== 0) {
+                    const rawProd = (DB.catalogo || []).find(x => String(x.id || x.codigo || x.sku) === String(idProd));
+                    if (rawProd) {
+                        rawProd.stock = (Number(rawProd.stock) || 0) - delta;
+                    }
+                }
+            });
+
+            // 2. Construir la nueva lista de ítems del pedido
+            Object.keys(nuevoMapaCarrito).forEach(id => {
+                const cant = Number(nuevoMapaCarrito[id]) || 0;
+                if (cant > 0) {
+                    const p = catalogMap.find(x => String(x.id) === String(id));
+                    const calc = p ? calcularPrecioSegunCantidad(p, cant, nuevoMapaCarrito) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '', cumpleIncentivo: false, comisionEfectivaPct: 0 };
+                    let tagTipo = 'Promo';
+                    if (calc.tipoDescuento === 'MIX') tagTipo = 'Mix';
+                    if (calc.tipoDescuento === 'COMBO') tagTipo = 'Combo';
+
+                    const nombreFinal = (p && calc.aplicaDescuento)
+                        ? `${p.nombre} [${tagTipo} -${calc.discPct}%]`
+                        : (p ? String(p.nombre || 'Artículo') : 'Artículo');
+
+                    itemsPedido.push({
+                        id: String(id),
+                        productId: String(id),
+                        id_producto: String(id),
+                        name: nombreFinal,
+                        descripcion: nombreFinal,
+                        qty: cant,
+                        cantidad: cant,
+                        price: calc.pvpUnitario,
+                        precio_unitario: calc.pvpUnitario,
+                        subtotal: calc.subtotal,
+                        total: calc.subtotal,
+                        commission: calc.comisionTotal,
+                        comision: calc.comisionTotal,
+                        comision_pct_aplicado: calc.comisionEfectivaPct || 0,
+                        incentivo_vendedor_activo: Boolean(calc.cumpleIncentivo),
+                        descuento_pct: calc.discPct || 0
+                    });
+                    subtotalBruto += calc.subtotal;
+                    comisionBruta += calc.comisionTotal;
+                }
+            });
+
+            regalosNuevos.forEach(reg => {
+                const descRegalo = `${reg.rewardName} [SIN CARGO / REGALO]`;
+                const cantReg = Number(reg.cantidad) || 1;
+                itemsPedido.push({
+                    id: String(reg.rewardId),
+                    productId: String(reg.rewardId),
+                    id_producto: String(reg.rewardId),
+                    name: descRegalo,
+                    descripcion: descRegalo,
+                    qty: cantReg,
+                    cantidad: cantReg,
+                    price: 0,
+                    precio_unitario: 0,
+                    subtotal: 0,
+                    total: 0,
+                    commission: 0,
+                    comision: 0,
+                    descuento_pct: 100
+                });
+            });
+
+            const evalTicket = evaluarEscaleraFacturacion(subtotalBruto, comisionBruta);
+            if (evalTicket.descuentoMonto > 0 && evalTicket.tierAlcanzado) {
+                const descTicket = `🏆 BONIFICACIÓN POR FACTURACIÓN (${evalTicket.tierAlcanzado.label} • -${evalTicket.discPct}% OFF)`;
+                itemsPedido.push({
+                    id: 'PROMO_TICKET_DESCUENTO',
+                    productId: 'PROMO_TICKET_DESCUENTO',
+                    id_producto: 'PROMO_TICKET_DESCUENTO',
+                    name: descTicket,
+                    descripcion: descTicket,
+                    qty: 1,
+                    cantidad: 1,
+                    price: -evalTicket.descuentoMonto,
+                    precio_unitario: -evalTicket.descuentoMonto,
+                    subtotal: -evalTicket.descuentoMonto,
+                    total: -evalTicket.descuentoMonto,
+                    commission: -evalTicket.comisionDescuento,
+                    comision: -evalTicket.comisionDescuento,
+                    descuento_pct: evalTicket.discPct
+                });
+            }
+
+            const now = new Date();
+            const fechaLocal = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString().slice(0, 19);
+
+            const pedidoActualizado = JSON.parse(JSON.stringify(Object.assign({}, pedOriginal, {
+                id: String(orderId),
+                fecha_entrega: String(nuevaFechaEntrega || pedOriginal.fecha_entrega || ''),
+                deliveryDate: String(nuevaFechaEntrega || pedOriginal.deliveryDate || ''),
+                items: itemsPedido,
+                subtotal_bruto: Number(evalTicket.subtotalBruto) || 0,
+                descuento_ticket_pct: Number(evalTicket.discPct) || 0,
+                descuento_ticket_monto: Number(evalTicket.descuentoMonto) || 0,
+                total_venta: Number(evalTicket.totalFinal) || 0,
+                total: Number(evalTicket.totalFinal) || 0,
+                comision_vendedor: Number(evalTicket.comisionFinal) || 0,
+                sellerCommission: Number(evalTicket.comisionFinal) || 0,
+                observacion: String(nuevaObs || ''),
+                obs: String(nuevaObs || ''),
+                editado_preventa: true,
+                ultima_edicion: fechaLocal
+            })));
+
+            // 3. Sincronizar en Firebase: tanto en colección `pedidos` como en `nexo_erp/datos_globales`
+            const snapPedidos = await db.collection('pedidos').where('id', '==', String(orderId)).get();
+            const promesas = [];
+            snapPedidos.forEach(docSnap => {
+                promesas.push(docSnap.ref.update(pedidoActualizado));
+            });
+
+            const globalRef = db.collection('nexo_erp').doc('datos_globales');
+            const globalDoc = await globalRef.get();
+            if (globalDoc.exists) {
+                const gData = globalDoc.data() || {};
+                let ordersArr = Array.isArray(gData.orders) ? gData.orders : [];
+                let catalogArr = Array.isArray(gData.catalog) ? gData.catalog : [];
+                let encontradoEnGlobal = false;
+
+                ordersArr = ordersArr.map(o => {
+                    if (String(o.id) === String(orderId)) {
+                        encontradoEnGlobal = true;
+                        return Object.assign({}, o, pedidoActualizado);
+                    }
+                    return o;
+                });
+
+                if (encontradoEnGlobal) {
+                    catalogArr.forEach(cProd => {
+                        const cId = String(cProd.id || cProd.codigo || cProd.sku);
+                        if (stockDeltaPorProducto[cId]) {
+                            cProd.stock = (Number(cProd.stock) || 0) - stockDeltaPorProducto[cId];
+                        }
+                    });
+                    promesas.push(globalRef.update({ orders: ordersArr, catalog: catalogArr }));
+                } else if (snapPedidos.empty) {
+                    promesas.push(db.collection('pedidos').add(pedidoActualizado));
+                }
+            } else if (snapPedidos.empty) {
+                promesas.push(db.collection('pedidos').add(pedidoActualizado));
+            }
+
+            await Promise.all(promesas);
+
+            // 4. Actualizar lista local de pedidos
+            DB.pedidosSemana = (DB.pedidosSemana || []).map(p => 
+                String(p.id) === String(orderId) ? Object.assign({}, pedidoActualizado, { _localCreatedAt: Date.now() }) : p
+            );
+            saveDB();
+
+            actualizarKpisSemanales();
+            renderMisPedidosCargados();
+            renderCatalogo(document.getElementById('inputBuscarProd').value);
+            actualizarBarraCarrito();
         }
 
         function initApp() {
@@ -683,6 +1431,7 @@
                 actualizarHeaderVendedor();
                 actualizarDropdownClientes();
                 actualizarKpisSemanales();
+                renderMisPedidosCargados();
                 renderCatalogo();
                 actualizarBarraCarrito();
             }
@@ -751,7 +1500,7 @@
                     if (idsEnNube.has(idStr)) return false;
                     if (descartados.includes(idStr)) return false;
                     const creadoHaceMs = ahoraMs - (Number(pLocal._localCreatedAt) || 0);
-                    return creadoHaceMs >= 0 && creadoHaceMs < 4000;
+                    return creadoHaceMs >= 0 && creadoHaceMs < 6000;
                 });
 
                 DB.pedidosSemana = [...pedidosDesdeNube, ...localesEnTransito];
@@ -762,6 +1511,7 @@
             if (esVendedorValidoPreventa(DB.vendedorActivo)) {
                 actualizarDropdownClientes();
                 actualizarKpisSemanales();
+                renderMisPedidosCargados();
                 renderCatalogo(document.getElementById('inputBuscarProd').value);
                 actualizarBarraCarrito();
             } else {
@@ -869,7 +1619,6 @@
                 `;
             }
 
-            // En el PDF para clientes solo mostramos promos de clientes (nunca incentivos internos de comisión)
             const destacados = prods.filter(p => p.isCustomerPromo);
             if (destacados.length > 0) {
                 html += `
@@ -1192,6 +1941,7 @@
             actualizarHeaderVendedor();
             actualizarDropdownClientes();
             actualizarKpisSemanales();
+            renderMisPedidosCargados();
             renderCatalogo();
             actualizarBarraCarrito();
             recargarDesdeFirebaseManual();
@@ -1289,7 +2039,7 @@
             const calc = calcularPrecioSegunCantidad(p, qty);
             let bannersHTML = '';
 
-            // 0. Banner de Incentivo de Comisión por Vendedor (Punto 6 - Exclusivo Preventista)
+            // 0. Banner de Incentivo de Comisión por Vendedor (Punto 6)
             if (p.incPromoActive && p.incPlusPct > 0) {
                 const plusEnPesos = Math.round(calc.pvpUnitario * (p.incPlusPct / 100));
                 if (qty > 0 && qty < p.incMinQty) {
@@ -1787,14 +2537,24 @@
 
         function abrirResumenPedidoModal() {
             const clienteId = document.getElementById('selCliente')?.value;
-            if (!clienteId) { alert('Seleccioná un cliente de tu lista.'); return; }
+            if (!clienteId && !pedidoEditandoCatalogoId) { alert('Seleccioná un cliente de tu lista.'); return; }
 
+            const pedEdit = pedidoEditandoCatalogoId ? (DB.pedidosSemana || []).find(p => String(p.id) === String(pedidoEditandoCatalogoId)) : null;
             const cliente = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
-            document.getElementById('resumenModalClienteNombre').textContent = cliente ? (cliente.name || cliente.nombre) : 'Cliente';
-            
-            const rawAddr = cliente ? (cliente.addr || cliente.direccion || '') : '';
-            const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
-            document.getElementById('resumenModalClienteDir').textContent = addrLimpia || 'Sin dirección';
+
+            const nomMostrar = pedEdit ? obtenerNombreClienteDePedido(pedEdit) : (cliente ? (cliente.name || cliente.nombre) : 'Cliente');
+            const dirMostrar = pedEdit ? obtenerDireccionClienteDePedido(pedEdit) : (() => {
+                const rawAddr = cliente ? (cliente.addr || cliente.direccion || '') : '';
+                return rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
+            })();
+
+            document.getElementById('resumenModalClienteNombre').textContent = nomMostrar;
+            document.getElementById('resumenModalClienteDir').textContent = dirMostrar || 'Sin dirección';
+
+            const btnConf = document.getElementById('btnConfirmarResumenModal');
+            if (btnConf) {
+                btnConf.textContent = pedidoEditandoCatalogoId ? 'Guardar Cambios' : 'Confirmar Pedido';
+            }
 
             const listCont = document.getElementById('resumenModalItemsList');
             let itemsHtml = '', subtotalBruto = 0, comisionBruta = 0;
@@ -1875,7 +2635,10 @@
             
             const nowLocal = new Date();
             nowLocal.setMinutes(nowLocal.getMinutes() - nowLocal.getTimezoneOffset());
-            document.getElementById('txtPedidoFechaEntrega').value = nowLocal.toISOString().slice(0, 10);
+            document.getElementById('txtPedidoFechaEntrega').value = pedEdit ? (pedEdit.fecha_entrega || pedEdit.deliveryDate || nowLocal.toISOString().slice(0, 10)) : nowLocal.toISOString().slice(0, 10);
+            if (pedEdit) {
+                document.getElementById('txtPedidoObservacion').value = pedEdit.observacion || pedEdit.obs || '';
+            }
 
             document.getElementById('modalResumenPedido').classList.remove('hidden');
         }
@@ -1883,6 +2646,31 @@
         function cerrarResumenPedidoModal() { document.getElementById('modalResumenPedido').classList.add('hidden'); }
 
         async function confirmarYGuardarPedido() {
+            const obs = (document.getElementById('txtPedidoObservacion')?.value || '').trim();
+            const fechaEntrega = document.getElementById('txtPedidoFechaEntrega')?.value || '';
+
+            // Si estamos en modo edición de un pedido existente desde el catálogo principal
+            if (pedidoEditandoCatalogoId) {
+                try {
+                    await ejecutarActualizacionPedidoExistente(pedidoEditandoCatalogoId, carrito, cantOriginalEdicionCatalogo, fechaEntrega, obs);
+                    pedidoEditandoCatalogoId = null;
+                    cantOriginalEdicionCatalogo = {};
+                    carrito = {};
+                    document.getElementById('bannerModoEdicionCatalogo').classList.add('hidden');
+                    document.getElementById('lblBtnVerPedidoTexto').textContent = 'Enviar';
+                    document.getElementById('txtPedidoObservacion').value = '';
+                    cerrarResumenPedidoModal();
+                    actualizarKpisSemanales();
+                    renderMisPedidosCargados();
+                    actualizarBarraCarrito();
+                    renderCatalogo(document.getElementById('inputBuscarProd').value);
+                    alert('✅ ¡Cambios guardados en el pedido con éxito!');
+                } catch (err) {
+                    alert('Error al guardar cambios del pedido: ' + (err.message || err));
+                }
+                return;
+            }
+
             const clienteId = document.getElementById('selCliente')?.value || '';
             if (!clienteId) {
                 alert('Por favor, seleccioná un cliente antes de confirmar el pedido.');
@@ -1899,9 +2687,6 @@
             const cliente = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
             const nombreFallback = document.getElementById('resumenModalClienteNombre')?.textContent || 'Cliente General';
             const dirFallback = document.getElementById('resumenModalClienteDir')?.textContent || '';
-
-            const obs = (document.getElementById('txtPedidoObservacion')?.value || '').trim();
-            const fechaEntrega = document.getElementById('txtPedidoFechaEntrega')?.value || '';
 
             let itemsPedido = [], subtotalBruto = 0, comisionBruta = 0;
             const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
@@ -1920,11 +2705,18 @@
                         : (p ? String(p.nombre || 'Artículo') : 'Artículo');
 
                     itemsPedido.push({
+                        id: String(id),
+                        productId: String(id),
                         id_producto: String(id),
+                        name: nombreFinal,
                         descripcion: nombreFinal,
+                        qty: cant,
                         cantidad: cant,
+                        price: calc.pvpUnitario,
                         precio_unitario: calc.pvpUnitario,
                         subtotal: calc.subtotal,
+                        total: calc.subtotal,
+                        commission: calc.comisionTotal,
                         comision: calc.comisionTotal,
                         comision_pct_aplicado: calc.comisionEfectivaPct || 0,
                         incentivo_vendedor_activo: Boolean(calc.cumpleIncentivo),
@@ -1945,34 +2737,49 @@
                 return;
             }
 
-            // Inyecta automáticamente los artículos de regalo a $0 y descuenta su stock del depósito
             const regalosList = obtenerRegalosActivosDelCarrito(catalogMap);
             regalosList.forEach(reg => {
+                const descRegalo = `${reg.rewardName} [SIN CARGO / REGALO]`;
+                const cantReg = Number(reg.cantidad) || 1;
                 itemsPedido.push({
+                    id: String(reg.rewardId),
+                    productId: String(reg.rewardId),
                     id_producto: String(reg.rewardId),
-                    descripcion: `${reg.rewardName} [SIN CARGO / REGALO]`,
-                    cantidad: Number(reg.cantidad) || 1,
+                    name: descRegalo,
+                    descripcion: descRegalo,
+                    qty: cantReg,
+                    cantidad: cantReg,
+                    price: 0,
                     precio_unitario: 0,
                     subtotal: 0,
+                    total: 0,
+                    commission: 0,
                     comision: 0,
                     descuento_pct: 100
                 });
 
                 const rawGiftProd = (DB.catalogo || []).find(x => String(x.id || x.codigo || x.sku) === String(reg.rewardId));
                 if (rawGiftProd) {
-                    rawGiftProd.stock = (Number(rawGiftProd.stock) || 0) - (Number(reg.cantidad) || 1);
+                    rawGiftProd.stock = (Number(rawGiftProd.stock) || 0) - cantReg;
                 }
             });
 
-            // Evalúa si aplica Escalera de Premios por Facturación Total (Punto 5)
             const evalTicket = evaluarEscaleraFacturacion(subtotalBruto, comisionBruta);
             if (evalTicket.descuentoMonto > 0 && evalTicket.tierAlcanzado) {
+                const descTicket = `🏆 BONIFICACIÓN POR FACTURACIÓN (${evalTicket.tierAlcanzado.label} • -${evalTicket.discPct}% OFF)`;
                 itemsPedido.push({
+                    id: 'PROMO_TICKET_DESCUENTO',
+                    productId: 'PROMO_TICKET_DESCUENTO',
                     id_producto: 'PROMO_TICKET_DESCUENTO',
-                    descripcion: `🏆 BONIFICACIÓN POR FACTURACIÓN (${evalTicket.tierAlcanzado.label} • -${evalTicket.discPct}% OFF)`,
+                    name: descTicket,
+                    descripcion: descTicket,
+                    qty: 1,
                     cantidad: 1,
+                    price: -evalTicket.descuentoMonto,
                     precio_unitario: -evalTicket.descuentoMonto,
                     subtotal: -evalTicket.descuentoMonto,
+                    total: -evalTicket.descuentoMonto,
+                    commission: -evalTicket.comisionDescuento,
                     comision: -evalTicket.comisionDescuento,
                     descuento_pct: evalTicket.discPct
                 });
@@ -1989,21 +2796,31 @@
             const nuevoPedido = JSON.parse(JSON.stringify({
                 id: String(Date.now()),
                 fecha: String(fechaLocal || ''),
+                date: String(fechaLocal || ''),
                 fecha_entrega: String(fechaEntrega || ''),
+                deliveryDate: String(fechaEntrega || ''),
                 cliente: {
                     id: String(clienteId || Date.now()),
                     nombre: String(nombreCliente || 'Cliente'),
                     direccion: String(addrLimpia || ''),
                     telefono: String(telCliente || '')
                 },
+                clientId: String(clienteId || Date.now()),
+                clientName: String(nombreCliente || 'Cliente'),
+                clientAddr: String(addrLimpia || ''),
+                clientPhone: String(telCliente || ''),
                 vendedor: String(vendedorVerificado),
+                seller: String(vendedorVerificado),
                 items: itemsPedido,
                 subtotal_bruto: Number(evalTicket.subtotalBruto) || 0,
                 descuento_ticket_pct: Number(evalTicket.discPct) || 0,
                 descuento_ticket_monto: Number(evalTicket.descuentoMonto) || 0,
                 total_venta: Number(evalTicket.totalFinal) || 0,
+                total: Number(evalTicket.totalFinal) || 0,
                 comision_vendedor: Number(evalTicket.comisionFinal) || 0,
-                observacion: String(obs || '')
+                sellerCommission: Number(evalTicket.comisionFinal) || 0,
+                observacion: String(obs || ''),
+                obs: String(obs || '')
             }));
 
             try {
@@ -2022,6 +2839,7 @@
             document.getElementById('txtPedidoObservacion').value = '';
             cerrarResumenPedidoModal();
             actualizarKpisSemanales();
+            renderMisPedidosCargados();
             actualizarBarraCarrito();
             renderCatalogo(document.getElementById('inputBuscarProd').value);
             
@@ -2038,8 +2856,8 @@
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
                 const fechaObj = parseFechaPedido(p.fecha || p.date);
                 if ((vendPed.includes(vendedorActual) || vendedorActual.includes(vendPed) || !vendPed) && fechaObj >= inicioCiclo) {
-                    totalVenta += (Number(p.total_venta || p.total) || 0);
-                    totalComision += (Number(p.comision_vendedor || p.sellerCommission) || 0);
+                    totalVenta += (Number(p.total_venta !== undefined ? p.total_venta : p.total) || 0);
+                    totalComision += (Number(p.comision_vendedor !== undefined ? p.comision_vendedor : p.sellerCommission) || 0);
                     cantPedidos++;
                 }
             });
@@ -2056,6 +2874,7 @@
                 DB.pedidosSemana = [];
                 saveDB();
                 actualizarKpisSemanales();
+                renderMisPedidosCargados();
             }
         }
 
