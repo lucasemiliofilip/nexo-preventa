@@ -494,11 +494,11 @@
             const giftRewardQty = Math.max(1, Number(p.giftRewardQty) || 1);
 
             // Punto 6: Incentivo de Comisión por Vendedor (Plus de comisión en artículos seleccionados)
-            const rawIncActive = Boolean(p.incPromoActive || p.incentiveActive || p.commPromoActive || p.plusComisionActive);
-            const rawIncPlusPct = Number(p.incPlusPct || p.incentivePlusPct || p.commPlusPct || p.plusComisionPct || p.extraSellerPct || 0);
-            const incMinQty = Math.max(1, Number(p.incMinQty || p.incentiveMinQty || p.commMinQty || 1));
-            const incTargetSeller = String(p.incTargetSeller || p.incentiveSeller || p.commTargetSeller || 'TODOS').trim();
-            const incNote = String(p.incNote || p.incentiveNote || p.commNote || '').trim();
+            const rawIncActive = Boolean(p.incPromoActive || p.sellerIncActive || p.incentiveActive || p.commPromoActive || p.plusComisionActive);
+            const rawIncPlusPct = Number(p.incPlusPct || p.sellerIncPct || p.incentivePlusPct || p.commPlusPct || p.plusComisionPct || p.extraSellerPct || 0);
+            const incMinQty = Math.max(1, Number(p.incMinQty || p.sellerIncMinQty || p.incentiveMinQty || p.commMinQty || 1));
+            const incTargetSeller = String(p.incTargetSeller || p.sellerIncTarget || p.incentiveSeller || p.commTargetSeller || 'TODOS').trim();
+            const incNote = String(p.incNote || p.sellerIncNote || p.incentiveNote || p.commNote || '').trim();
 
             const vendActualLimpio = (DB.vendedorActivo || '').toLowerCase().trim();
             const targetLimpio = incTargetSeller.toLowerCase();
@@ -1557,11 +1557,8 @@
                                     <i class="fa-solid ${badgeHeaderIcon}"></i> ${badgeHeaderText}
                                 </div>
                             ` : ''}
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-xs font-extrabold text-white truncate">${p.nombre}</span>
-                                <span class="text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${stockBadgeColor} flex-shrink-0">
-                                    Stock: ${p.stock}
-                                </span>
+                            <div class="mb-0.5">
+                                <span class="text-xs font-extrabold text-white leading-snug break-words block">${p.nombre}</span>
                             </div>
                             <span class="text-[10px] text-slate-400 block">${p.presentacion} • ${p.categoria}</span>
                             
@@ -1569,18 +1566,23 @@
                                 ${construirHTMLBloquePrecioProducto(p, qty)}
                             </div>
                         </div>
-                        <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1 flex-shrink-0">
-                            <button onclick="modificarCantidad('${p.id}', -1)" class="w-8 h-8 rounded-lg bg-slate-900 text-white font-black text-sm flex items-center justify-center cursor-pointer">-</button>
-                            <input 
-                                type="number" 
-                                id="qty-${p.id}" 
-                                value="${qty > 0 ? qty : ''}" 
-                                placeholder="0"
-                                min="0"
-                                oninput="setearCantidadDirecta('${p.id}', this.value)"
-                                class="w-10 text-center font-mono font-bold text-xs bg-transparent outline-none ${qty > 0 ? 'text-emerald-400' : 'text-slate-500'}"
-                            >
-                            <button onclick="modificarCantidad('${p.id}', 1)" class="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 font-black text-sm flex items-center justify-center cursor-pointer">+</button>
+                        <div class="flex flex-col items-center gap-1.5 flex-shrink-0">
+                            <div class="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 gap-1">
+                                <button onclick="modificarCantidad('${p.id}', -1)" class="w-8 h-8 rounded-lg bg-slate-900 text-white font-black text-sm flex items-center justify-center cursor-pointer">-</button>
+                                <input 
+                                    type="number" 
+                                    id="qty-${p.id}" 
+                                    value="${qty > 0 ? qty : ''}" 
+                                    placeholder="0"
+                                    min="0"
+                                    oninput="setearCantidadDirecta('${p.id}', this.value)"
+                                    class="w-10 text-center font-mono font-bold text-xs bg-transparent outline-none ${qty > 0 ? 'text-emerald-400' : 'text-slate-500'}"
+                                >
+                                <button onclick="modificarCantidad('${p.id}', 1)" class="w-8 h-8 rounded-lg bg-emerald-500 text-slate-950 font-black text-sm flex items-center justify-center cursor-pointer">+</button>
+                            </div>
+                            <span class="text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-md border ${stockBadgeColor} w-full text-center">
+                                Stock: ${p.stock}
+                            </span>
                         </div>
                     </div>
                 `;
