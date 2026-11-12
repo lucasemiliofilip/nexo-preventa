@@ -20,7 +20,7 @@
         .input-pin { letter-spacing: 0.35em; font-family: monospace; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased pb-28">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased pb-36">
 
     <div id="appPrincipalWrapper" class="flex-1 flex flex-col">
         <!-- PANTALLA DE LOGIN CON PIN Y VINCULACIÓN DE DISPOSITIVO -->
@@ -145,6 +145,9 @@
                 </select>
             </div>
 
+            <!-- BANNER FIJO DE ESCALERA DE FACTURACIÓN SI EXISTE -->
+            <div id="bannerEscaleraFacturacionTop" class="hidden bg-gradient-to-r from-amber-950/60 via-slate-900 to-slate-900 border border-amber-500/40 rounded-2xl p-3 shadow-lg"></div>
+
             <!-- FILTRO DE PROMOS Y BUSCADOR -->
             <div class="space-y-2">
                 <div class="flex items-center gap-2">
@@ -202,16 +205,24 @@
         </div>
     </div>
 
-    <!-- BARRA INFERIOR -->
-    <div id="barraFlotantePedido" class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-3.5 z-40">
-        <div class="max-w-md mx-auto flex items-center justify-between gap-3">
-            <div>
-                <span id="txtItemsEnCarrito" class="text-[11px] text-slate-400 block font-semibold">0 bultos</span>
-                <div id="txtTotalCarrito" class="text-lg font-mono font-black text-emerald-400">$ 0,00</div>
+    <!-- BARRA INFERIOR CON PROGRESO DE FACTURACIÓN -->
+    <div id="barraFlotantePedido" class="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-3 z-40">
+        <div class="max-w-md mx-auto space-y-2">
+            <!-- Barra de progreso de Escalera de Premios por Facturación (Punto 5) -->
+            <div id="barraProgresoTicketContenedor" class="hidden"></div>
+
+            <div class="flex items-center justify-between gap-3">
+                <div>
+                    <span id="txtItemsEnCarrito" class="text-[11px] text-slate-400 block font-semibold">0 bultos</span>
+                    <div class="flex items-baseline gap-2">
+                        <span id="txtSubtotalTachadoCarrito" class="hidden text-xs font-mono text-slate-500 line-through">$ 0</span>
+                        <div id="txtTotalCarrito" class="text-lg font-mono font-black text-emerald-400">$ 0</div>
+                    </div>
+                </div>
+                <button onclick="abrirResumenPedidoModal()" id="btnVerPedido" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase px-5 py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5">
+                    <i class="fa-solid fa-paper-plane"></i> Enviar
+                </button>
             </div>
-            <button onclick="abrirResumenPedidoModal()" id="btnVerPedido" class="bg-emerald-500 hover:bg-emerald-400 active:scale-95 text-slate-950 font-black text-xs uppercase px-5 py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 cursor-pointer flex items-center gap-1.5">
-                <i class="fa-solid fa-paper-plane"></i> Enviar
-            </button>
         </div>
     </div>
 
@@ -232,9 +243,12 @@
                 <span class="text-[10px] font-extrabold uppercase text-slate-400 block">Artículos a despachar</span>
                 <div id="resumenModalItemsList" class="space-y-1.5 max-h-48 overflow-y-auto pr-1"></div>
             </div>
-            <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex justify-between items-center">
-                <span class="text-xs font-bold text-slate-300">TOTAL PEDIDO:</span>
-                <span id="resumenModalTotal" class="text-lg font-mono font-black text-emerald-400">$ 0,00</span>
+            <div class="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5">
+                <div id="resumenModalDesgloseTicket" class="hidden space-y-1 pb-1.5 border-b border-slate-800 text-xs"></div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-300">TOTAL PEDIDO:</span>
+                    <span id="resumenModalTotal" class="text-lg font-mono font-black text-emerald-400">$ 0</span>
+                </div>
             </div>
             
             <div class="grid grid-cols-2 gap-3 pt-1 border-t border-slate-800">
@@ -302,7 +316,7 @@
         const STORAGE_KEY_PINS_FIJOS = 'nexo_vendedores_pins_permanente';
 
         let DB = {
-            bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco' },
+            bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco', ticketPromoTiers: [] },
             vendedorActivo: '',
             vendedoresPins: {},
             catalogo: [],
@@ -386,6 +400,64 @@
             return isNaN(d.getTime()) ? new Date() : d;
         }
 
+        // --- PUNTO 5: LECTOR DE ESCALERA DE PREMIOS POR FACTURACIÓN TOTAL ---
+        function obtenerEscalonesFacturacionActivos() {
+            let tiers = [];
+            if (DB.bizConfig && Array.isArray(DB.bizConfig.ticketPromoTiers)) {
+                tiers = DB.bizConfig.ticketPromoTiers;
+            } else if (Array.isArray(DB.catalogo)) {
+                const itemConTiers = DB.catalogo.find(p => Array.isArray(p.ticketPromoTiers) && p.ticketPromoTiers.length > 0);
+                if (itemConTiers) tiers = itemConTiers.ticketPromoTiers;
+            }
+            return (tiers || [])
+                .filter(t => t && t.active !== false && Number(t.minAmount) > 0 && Number(t.discPct) > 0)
+                .map(t => ({
+                    id: String(t.id || ''),
+                    minAmount: Number(t.minAmount) || 0,
+                    discPct: Number(t.discPct) || 0,
+                    label: String(t.label || `Superando ${fmtMoneda(t.minAmount)}`).trim()
+                }))
+                .sort((a, b) => a.minAmount - b.minAmount);
+        }
+
+        function evaluarEscaleraFacturacion(subtotalBruto, comisionBruta) {
+            const tiers = obtenerEscalonesFacturacionActivos();
+            const sub = Number(subtotalBruto) || 0;
+            const com = Number(comisionBruta) || 0;
+
+            let tierAlcanzado = null;
+            let proximoTier = null;
+
+            for (let i = 0; i < tiers.length; i++) {
+                if (sub >= tiers[i].minAmount) {
+                    tierAlcanzado = tiers[i];
+                } else if (!proximoTier) {
+                    proximoTier = tiers[i];
+                }
+            }
+
+            const discPct = tierAlcanzado ? tierAlcanzado.discPct : 0;
+            const descuentoMonto = discPct > 0 ? Math.round(sub * (discPct / 100)) : 0;
+            const totalFinal = Math.max(0, sub - descuentoMonto);
+            const comisionDescuento = discPct > 0 ? (com * (discPct / 100)) : 0;
+            const comisionFinal = Math.max(0, com - comisionDescuento);
+
+            return {
+                tieneEscaleraConfigurada: tiers.length > 0,
+                tiers,
+                tierAlcanzado,
+                proximoTier,
+                discPct,
+                subtotalBruto: sub,
+                descuentoMonto,
+                totalFinal,
+                comisionBruta: com,
+                comisionDescuento,
+                comisionFinal,
+                faltaParaProximo: proximoTier ? Math.max(0, proximoTier.minAmount - sub) : 0
+            };
+        }
+
         // --- LECTOR DE PRODUCTO Y REGLAS (VOLUMEN + MIX + COMBO + REGALOS $0) ---
         function obtenerDatosProducto(p) {
             const id = String(p.id || p.codigo || p.sku || Math.random());
@@ -466,7 +538,6 @@
                 cumpleCombo = (faltantesComboCount === 0);
             }
 
-            // Cálculo proporcional de unidades de regalo ($0) generadas por este artículo
             const multiplosRegalo = (p.giftPromoActive && p.giftTriggerQty > 0 && cant >= p.giftTriggerQty)
                 ? Math.floor(cant / p.giftTriggerQty)
                 : 0;
@@ -512,7 +583,6 @@
             };
         }
 
-        // Devuelve la lista consolidada de artículos de regalo ($0) generados por el carrito actual
         function obtenerRegalosActivosDelCarrito(catalogMap) {
             const regalosAgrupados = {};
             Object.keys(carrito).forEach(id => {
@@ -743,6 +813,7 @@
             const hoy = new Date().toLocaleDateString('es-AR');
             const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA / COMERCIO';
             const bizContact = (DB.bizConfig && DB.bizConfig.contact) ? DB.bizConfig.contact : 'Presidencia Roque Sáenz Peña, Chaco';
+            const escalonesTicket = obtenerEscalonesFacturacionActivos();
 
             let html = `
                 <div id="hojaImprimiblePDF" style="background:#ffffff; color:#0f172a; padding:14px; font-family:sans-serif; font-size:11px;">
@@ -756,6 +827,17 @@
                         </div>
                     </div>
             `;
+
+            if (escalonesTicket.length > 0) {
+                html += `
+                    <div style="margin-bottom: 14px; padding: 10px 12px; border-radius: 6px; border: 1.5px solid #10b981; background: #ecfdf5;">
+                        <div style="font-size: 11px; font-weight: 900; color: #065f46; text-transform: uppercase; margin-bottom: 5px;">🏆 DESCUENTOS GENERALES POR MONTO DE COMPRA</div>
+                        <div style="font-size: 11px; color: #047857; font-weight: 800;">
+                            ${escalonesTicket.map(t => `• Superando ${fmtMoneda(t.minAmount)} ➔ -${t.discPct}% OFF General`).join(' &nbsp;|&nbsp; ')}
+                        </div>
+                    </div>
+                `;
+            }
 
             const destacados = prods.filter(p => p.isFeatured);
             if (destacados.length > 0) {
@@ -1313,7 +1395,31 @@
             return bannersHTML + lineaPrecioHTML;
         }
 
+        function renderBannerEscaleraTop() {
+            const box = document.getElementById('bannerEscaleraFacturacionTop');
+            if (!box) return;
+            const tiers = obtenerEscalonesFacturacionActivos();
+            if (tiers.length === 0) {
+                box.classList.add('hidden');
+                return;
+            }
+            box.classList.remove('hidden');
+            box.innerHTML = `
+                <div class="flex items-center gap-2 text-[11px] font-black uppercase text-amber-400 mb-1.5">
+                    <i class="fa-solid fa-trophy"></i> Premios por Facturación Total del Pedido
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                    ${tiers.map(t => `
+                        <span class="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-200 font-mono font-bold text-[10px]">
+                            +${fmtMoneda(t.minAmount)} ➔ -${t.discPct}% OFF
+                        </span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
         function renderCatalogo(query = '') {
+            renderBannerEscaleraTop();
             const container = document.getElementById('listaProductosContenedor');
             if (!container) return;
 
@@ -1527,7 +1633,7 @@
         }
 
         function actualizarBarraCarrito() {
-            let totalUnidades = 0, totalDinero = 0;
+            let totalUnidades = 0, subtotalBruto = 0, comisionBruta = 0;
             const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
 
             Object.keys(carrito).forEach(id => {
@@ -1537,18 +1643,74 @@
                     totalUnidades += cant;
                     if (p) {
                         const calc = calcularPrecioSegunCantidad(p, cant);
-                        totalDinero += calc.subtotal;
+                        subtotalBruto += calc.subtotal;
+                        comisionBruta += calc.comisionTotal;
                     }
                 }
             });
 
             const regalosList = obtenerRegalosActivosDelCarrito(catalogMap);
             const totalRegalos = regalosList.reduce((acc, g) => acc + g.cantidad, 0);
+            const evalTicket = evaluarEscaleraFacturacion(subtotalBruto, comisionBruta);
+
+            const barraTicketBox = document.getElementById('barraProgresoTicketContenedor');
+            if (barraTicketBox) {
+                if (evalTicket.tieneEscaleraConfigurada && totalUnidades > 0) {
+                    barraTicketBox.classList.remove('hidden');
+                    if (evalTicket.tierAlcanzado && evalTicket.proximoTier) {
+                        const pctAvance = Math.min(100, Math.round((subtotalBruto / evalTicket.proximoTier.minAmount) * 100));
+                        barraTicketBox.innerHTML = `
+                            <div class="bg-slate-950/90 border border-emerald-500/40 rounded-xl px-3 py-1.5 space-y-1">
+                                <div class="flex items-center justify-between text-[10px]">
+                                    <span class="font-extrabold text-emerald-400">🎉 ¡-${evalTicket.discPct}% OFF ACTIVO! (Ahorra ${fmtMoneda(evalTicket.descuentoMonto)})</span>
+                                    <span class="text-amber-300 font-bold">+${fmtMoneda(evalTicket.faltaParaProximo)} ➔ -${evalTicket.proximoTier.discPct}% OFF</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-emerald-500 to-amber-400 transition-all duration-300" style="width:${pctAvance}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    } else if (evalTicket.tierAlcanzado && !evalTicket.proximoTier) {
+                        barraTicketBox.innerHTML = `
+                            <div class="bg-emerald-950/60 border border-emerald-400 rounded-xl px-3 py-1.5 flex items-center justify-between text-[11px]">
+                                <span class="font-black text-emerald-300"><i class="fa-solid fa-trophy text-amber-400 mr-1"></i> ¡MÁXIMO BENEFICIO! -${evalTicket.discPct}% OFF GENERAL</span>
+                                <span class="font-mono font-black text-emerald-400">-${fmtMoneda(evalTicket.descuentoMonto)}</span>
+                            </div>
+                        `;
+                    } else if (evalTicket.proximoTier) {
+                        const pctAvance = Math.min(99, Math.round((subtotalBruto / evalTicket.proximoTier.minAmount) * 100));
+                        barraTicketBox.innerHTML = `
+                            <div class="bg-slate-950/90 border border-amber-500/40 rounded-xl px-3 py-1.5 space-y-1">
+                                <div class="flex items-center justify-between text-[10px]">
+                                    <span class="font-bold text-amber-300"><i class="fa-solid fa-trophy"></i> Sumá <strong>${fmtMoneda(evalTicket.faltaParaProximo)}</strong> más para activar <strong>-${evalTicket.proximoTier.discPct}% OFF General</strong></span>
+                                    <span class="font-mono text-slate-400">${pctAvance}%</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-amber-400 transition-all duration-300" style="width:${pctAvance}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    barraTicketBox.classList.add('hidden');
+                }
+            }
 
             document.getElementById('txtItemsEnCarrito').textContent = totalRegalos > 0
                 ? `${totalUnidades} bultos (+${totalRegalos} de regalo 🎁)`
                 : `${totalUnidades} bultos`;
-            document.getElementById('txtTotalCarrito').textContent = fmtMoneda(totalDinero);
+
+            const lblSubTachado = document.getElementById('txtSubtotalTachadoCarrito');
+            if (lblSubTachado) {
+                if (evalTicket.descuentoMonto > 0) {
+                    lblSubTachado.textContent = fmtMoneda(evalTicket.subtotalBruto);
+                    lblSubTachado.classList.remove('hidden');
+                } else {
+                    lblSubTachado.classList.add('hidden');
+                }
+            }
+
+            document.getElementById('txtTotalCarrito').textContent = fmtMoneda(evalTicket.totalFinal);
             const btnVer = document.getElementById('btnVerPedido');
             if (btnVer) { btnVer.disabled = (totalUnidades === 0); btnVer.style.opacity = (totalUnidades === 0) ? '0.5' : '1'; }
         }
@@ -1565,15 +1727,16 @@
             document.getElementById('resumenModalClienteDir').textContent = addrLimpia || 'Sin dirección';
 
             const listCont = document.getElementById('resumenModalItemsList');
-            let itemsHtml = '', grandTotal = 0;
+            let itemsHtml = '', subtotalBruto = 0, comisionBruta = 0;
             const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
 
             Object.keys(carrito).forEach(id => {
                 const cant = carrito[id] || 0;
                 if (cant > 0) {
                     const p = catalogMap.find(x => String(x.id) === String(id));
-                    const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '' };
-                    grandTotal += calc.subtotal;
+                    const calc = p ? calcularPrecioSegunCantidad(p, cant) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0, tipoDescuento: '' };
+                    subtotalBruto += calc.subtotal;
+                    comisionBruta += calc.comisionTotal;
                     let nombreEtiqueta = 'Vol.';
                     if (calc.tipoDescuento === 'MIX') nombreEtiqueta = 'Mix';
                     if (calc.tipoDescuento === 'COMBO') nombreEtiqueta = 'Combo';
@@ -1596,7 +1759,6 @@
                 }
             });
 
-            // Agrega al resumen las líneas automáticas de regalo sin cargo ($0)
             const regalosList = obtenerRegalosActivosDelCarrito(catalogMap);
             regalosList.forEach(reg => {
                 itemsHtml += `
@@ -1613,7 +1775,29 @@
             });
 
             listCont.innerHTML = itemsHtml;
-            document.getElementById('resumenModalTotal').textContent = fmtMoneda(grandTotal);
+
+            const evalTicket = evaluarEscaleraFacturacion(subtotalBruto, comisionBruta);
+            const desgloseBox = document.getElementById('resumenModalDesgloseTicket');
+            if (desgloseBox) {
+                if (evalTicket.descuentoMonto > 0 && evalTicket.tierAlcanzado) {
+                    desgloseBox.classList.remove('hidden');
+                    desgloseBox.innerHTML = `
+                        <div class="flex justify-between text-slate-400">
+                            <span>Subtotal Artículos:</span>
+                            <span class="font-mono">${fmtMoneda(evalTicket.subtotalBruto)}</span>
+                        </div>
+                        <div class="flex justify-between text-amber-300 font-bold">
+                            <span>🏆 Premio Facturación (-${evalTicket.discPct}% OFF):</span>
+                            <span class="font-mono">-${fmtMoneda(evalTicket.descuentoMonto)}</span>
+                        </div>
+                    `;
+                } else {
+                    desgloseBox.classList.add('hidden');
+                    desgloseBox.innerHTML = '';
+                }
+            }
+
+            document.getElementById('resumenModalTotal').textContent = fmtMoneda(evalTicket.totalFinal);
             
             const nowLocal = new Date();
             nowLocal.setMinutes(nowLocal.getMinutes() - nowLocal.getTimezoneOffset());
@@ -1645,7 +1829,7 @@
             const obs = (document.getElementById('txtPedidoObservacion')?.value || '').trim();
             const fechaEntrega = document.getElementById('txtPedidoFechaEntrega')?.value || '';
 
-            let itemsPedido = [], totalPedido = 0, comisionPedido = 0;
+            let itemsPedido = [], subtotalBruto = 0, comisionBruta = 0;
             const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
 
             Object.keys(carrito).forEach(id => {
@@ -1670,8 +1854,8 @@
                         comision: calc.comisionTotal,
                         descuento_pct: calc.discPct || 0
                     });
-                    totalPedido += calc.subtotal;
-                    comisionPedido += calc.comisionTotal;
+                    subtotalBruto += calc.subtotal;
+                    comisionBruta += calc.comisionTotal;
 
                     const rawProd = (DB.catalogo || []).find(x => String(x.id || x.codigo || x.sku) === String(id));
                     if (rawProd) {
@@ -1704,6 +1888,20 @@
                 }
             });
 
+            // Evalúa si aplica Escalera de Premios por Facturación Total (Punto 5)
+            const evalTicket = evaluarEscaleraFacturacion(subtotalBruto, comisionBruta);
+            if (evalTicket.descuentoMonto > 0 && evalTicket.tierAlcanzado) {
+                itemsPedido.push({
+                    id_producto: 'PROMO_TICKET_DESCUENTO',
+                    descripcion: `🏆 BONIFICACIÓN POR FACTURACIÓN (${evalTicket.tierAlcanzado.label} • -${evalTicket.discPct}% OFF)`,
+                    cantidad: 1,
+                    precio_unitario: -evalTicket.descuentoMonto,
+                    subtotal: -evalTicket.descuentoMonto,
+                    comision: -evalTicket.comisionDescuento,
+                    descuento_pct: evalTicket.discPct
+                });
+            }
+
             const rawAddr = cliente ? String(cliente.addr || cliente.direccion || '') : dirFallback;
             const addrLimpia = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr.trim();
             const nombreCliente = cliente ? String(cliente.name || cliente.nombre || nombreFallback) : nombreFallback;
@@ -1724,8 +1922,11 @@
                 },
                 vendedor: String(vendedorVerificado),
                 items: itemsPedido,
-                total_venta: Number(totalPedido) || 0,
-                comision_vendedor: Number(comisionPedido) || 0,
+                subtotal_bruto: Number(evalTicket.subtotalBruto) || 0,
+                descuento_ticket_pct: Number(evalTicket.discPct) || 0,
+                descuento_ticket_monto: Number(evalTicket.descuentoMonto) || 0,
+                total_venta: Number(evalTicket.totalFinal) || 0,
+                comision_vendedor: Number(evalTicket.comisionFinal) || 0,
                 observacion: String(obs || '')
             }));
 
