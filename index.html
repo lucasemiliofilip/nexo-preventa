@@ -71,12 +71,12 @@
 
         <!-- HEADER SUPERIOR -->
         <header class="bg-slate-900 border-b border-slate-800 p-4 sticky top-0 z-30 shadow-lg">
-            <div class="max-w-md mx-auto flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-xl shadow-md">
+            <div class="max-w-md mx-auto flex items-center justify-between gap-2">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-black text-xl shadow-md flex-shrink-0">
                         N
                     </div>
-                    <div>
+                    <div class="min-w-0">
                         <h1 class="text-sm font-extrabold text-white leading-tight">Nexo Preventa</h1>
                         <div class="flex items-center gap-2 mt-1 flex-wrap">
                             <div class="flex items-center gap-1 cursor-pointer hover:text-white transition" onclick="bloquearSesion()" title="Bloquear Pantalla">
@@ -88,17 +88,22 @@
                                 <i class="fa-solid fa-key text-[10px]"></i>
                                 <span class="text-[10px] font-bold">PIN</span>
                             </div>
-                            <div class="w-px h-3 bg-slate-700"></div>
-                            <button id="btnHeaderListaPrecios" onclick="compartirListaPreciosDirecto()" class="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 rounded-lg text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition cursor-pointer">
+                        </div>
+                        <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            <button id="btnHeaderListaPrecios" onclick="compartirListaPreciosDirecto()" class="flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-emerald-400 hover:bg-emerald-500/25 active:scale-95 transition cursor-pointer">
                                 <i class="fa-solid fa-share-nodes text-[10px]"></i>
                                 <span class="text-[10px] font-bold">Lista de Precios</span>
+                            </button>
+                            <button id="btnHeaderCatalogoSinPrecios" onclick="compartirCatalogoSinPreciosDirecto()" class="flex items-center gap-1.5 bg-blue-500/15 border border-blue-500/30 px-2.5 py-1 rounded-lg text-blue-400 hover:bg-blue-500/25 active:scale-95 transition cursor-pointer">
+                                <i class="fa-solid fa-book-open text-[10px]"></i>
+                                <span class="text-[10px] font-bold">Catálogo</span>
                             </button>
                         </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2 flex-shrink-0">
                     <button onclick="recargarDesdeFirebaseManual()" id="btnSync" class="bg-slate-800 text-emerald-400 font-black text-[10px] px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 border border-emerald-500/30 cursor-pointer">
-                        <i class="fa-solid fa-cloud text-xs"></i> En Vivo
+                        <i class="fa-solid fa-cloud-check text-xs"></i> Online
                     </button>
                 </div>
             </div>
@@ -243,7 +248,7 @@
                 <i class="fa-brands fa-whatsapp"></i>
             </div>
             <div>
-                <h3 class="text-sm font-black uppercase text-white">Lista de Precios Lista</h3>
+                <h3 id="tituloModalConfirmarPDF" class="text-sm font-black uppercase text-white">Documento PDF Listo</h3>
                 <p class="text-xs text-slate-400 mt-1">Tocá el botón para abrir el menú de compartir y elegir el contacto de WhatsApp.</p>
             </div>
             <div class="space-y-2">
@@ -486,6 +491,8 @@
         let carrito = {};
         let soloPromosActivas = false;
         let archivoPDFListoParaCompartir = null;
+        let tituloShareActual = '';
+        let textoShareActual = '';
 
         // Variables para editar un pedido existente
         let pedidoEditandoModalId = null;
@@ -692,7 +699,6 @@
             msg += `──────────────────\n`;
             msg += `_¡Muchas gracias por tu compra!_`;
 
-            // Abre siempre el selector de contactos de WhatsApp ("Enviar a...") sin fijar número
             const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
             window.open(url, '_blank');
         }
@@ -774,6 +780,7 @@
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
             const stock = !isNaN(Number(p.stock)) ? Number(p.stock) : 0;
+            const img = (p.img && String(p.img).length > 20 && !String(p.img).includes('indexeddb_saved')) ? String(p.img) : '';
             
             const volPromoActive = Boolean(p.volPromoActive && Number(p.volMinQty) > 0 && Number(p.volDiscPct) > 0);
             const volMinQty = Number(p.volMinQty) || 0;
@@ -831,7 +838,7 @@
             const activo = (p.selectedForCatalog !== false && p.inCatalog !== false && p.activo !== false);
 
             return {
-                id, nombre, presentacion, stock, isFeatured, isCustomerPromo, promoText,
+                id, nombre, presentacion, stock, img, isFeatured, isCustomerPromo, promoText,
                 pvp, comision, comisionPct: comisionBasePct, comisionBasePct,
                 volPromoActive, volMinQty, volDiscPct,
                 mixPromoActive, mixTriggerId, mixTriggerName, mixTriggerQty, mixDiscPct,
@@ -1935,7 +1942,7 @@
                 if (doc.exists) {
                     aplicarDatosDesdeFirebase(doc.data());
                     const btnSync = document.getElementById('btnSync');
-                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> En Vivo';
+                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> Online';
                 }
             });
 
@@ -1975,10 +1982,10 @@
             db.collection('nexo_erp').doc('datos_globales').get({ source: 'server' })
                 .then(doc => {
                     if (doc.exists) aplicarDatosDesdeFirebase(doc.data());
-                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> En Vivo';
+                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> Online';
                 })
                 .catch(() => {
-                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud text-xs"></i> En Vivo';
+                    if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud text-xs"></i> Online';
                 });
         }
 
@@ -2000,6 +2007,7 @@
             renderCatalogo(document.getElementById('inputBuscarProd').value);
         }
 
+        // --- GENERADOR HTML DE LISTA DE PRECIOS CON IMPORTES ---
         function construirHTMLListaPreciosERP(prods) {
             const hoy = new Date().toLocaleDateString('es-AR');
             const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA / COMERCIO';
@@ -2092,6 +2100,108 @@
             return html;
         }
 
+        // --- GENERADOR HTML DE CATÁLOGO COMERCIAL DEL ERP (SIN PRECIOS) ---
+        function construirHTMLCatalogoSinPreciosERP(prods) {
+            const hoy = new Date().toLocaleDateString('es-AR');
+            const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA / COMERCIO';
+            const bizContact = (DB.bizConfig && DB.bizConfig.contact) ? DB.bizConfig.contact : 'Presidencia Roque Sáenz Peña, Chaco';
+            const escalonesTicket = obtenerEscalonesFacturacionActivos();
+
+            let html = `
+                <div id="hojaImprimiblePDF" style="background:#ffffff; color:#0f172a; padding:14px; font-family:sans-serif; font-size:11px;">
+                    <div style="border-bottom: 2.5px solid #0f172a; padding-bottom: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: flex-end;">
+                        <div>
+                            <span style="background:#dbeafe; color:#1e40af; font-weight:800; padding:2px 8px; border-radius:4px; font-size:9.5px; text-transform:uppercase;">Catálogo de Productos</span>
+                            <h1 style="font-size: 20px; font-weight: 900; text-transform: uppercase; color: #0f172a; margin: 4px 0 0 0;">${bizName}</h1>
+                            <div style="font-size: 10px; color: #475569; margin-top: 2px;">${bizContact} • Exhibición Comercial</div>
+                        </div>
+                        <div style="text-align: right; font-size: 10px; color: #475569;">
+                            Emitido: <strong>${hoy}</strong>
+                        </div>
+                    </div>
+            `;
+
+            if (escalonesTicket.length > 0) {
+                html += `
+                    <div style="margin-bottom: 14px; padding: 10px 12px; border-radius: 8px; border: 1.5px solid #10b981; background: #ecfdf5;">
+                        <div style="font-size: 11px; font-weight: 900; color: #065f46; text-transform: uppercase; margin-bottom: 5px;">🏆 PREMIOS Y DESCUENTOS GENERALES POR MONTO DE COMPRA</div>
+                        <div style="font-size: 11px; color: #047857; font-weight: 800;">
+                            ${escalonesTicket.map(t => `• Superando ${fmtMoneda(t.minAmount)} ➔ -${t.discPct}% OFF General`).join(' &nbsp;|&nbsp; ')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            const destacados = prods.filter(p => p.isCustomerPromo);
+            if (destacados.length > 0) {
+                html += `
+                    <div style="margin-bottom: 16px; padding: 12px; border-radius: 10px; border: 2px solid #f59e0b; background: #fffbeb;">
+                        <div style="font-size: 11px; font-weight: 900; color: #92400e; text-transform: uppercase; margin-bottom: 8px;">🔥 OFERTAS Y PROMOCIONES DESTACADAS</div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                            ${destacados.map(p => `
+                                <div style="background: #ffffff; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; page-break-inside: avoid;">
+                                    <div>
+                                        ${p.img ? `
+                                            <div style="height: 85px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 6px; overflow: hidden; padding: 4px;">
+                                                <img src="${p.img}" style="max-height: 100%; max-width: 100%; object-fit: contain;">
+                                            </div>
+                                        ` : ''}
+                                        <div style="font-size: 11px; font-weight: 800; color: #0f172a; line-height: 1.25;">${p.nombre}</div>
+                                        <div style="font-size: 10px; font-weight: 700; color: #475569; margin-top: 3px;">📦 ${p.presentacion}</div>
+                                    </div>
+                                    ${p.promoText ? `
+                                        <div style="margin-top: 6px; padding: 4px 6px; border-radius: 5px; background: #fef3c7; color: #92400e; font-size: 9.5px; font-weight: 900;">
+                                            ⚡ ${p.promoText}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            const agrupados = {};
+            prods.forEach(p => {
+                const cat = (p.categoria || 'General');
+                if (!agrupados[cat]) agrupados[cat] = [];
+                agrupados[cat].push(p);
+            });
+
+            for (const cat of Object.keys(agrupados).sort()) {
+                html += `
+                    <div style="margin-bottom: 14px;">
+                        <div style="background: #0f172a; color: #ffffff; padding: 5px 10px; font-weight: 900; text-transform: uppercase; font-size: 11px; margin-bottom: 8px; border-radius: 5px;">
+                            ${cat}
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                            ${agrupados[cat].map(p => `
+                                <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; page-break-inside: avoid;">
+                                    <div>
+                                        ${p.img ? `
+                                            <div style="height: 85px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 6px; overflow: hidden; padding: 4px;">
+                                                <img src="${p.img}" style="max-height: 100%; max-width: 100%; object-fit: contain;">
+                                            </div>
+                                        ` : ''}
+                                        <div style="font-size: 11px; font-weight: 800; color: #0f172a; line-height: 1.25;">${p.nombre}</div>
+                                        <div style="font-size: 10px; font-weight: 700; color: #64748b; margin-top: 3px;">📦 ${p.presentacion || 'Unidad'}</div>
+                                    </div>
+                                    ${p.isCustomerPromo && p.promoText ? `
+                                        <div style="margin-top: 6px; padding: 4px 6px; border-radius: 5px; background: #fffbeb; border: 1px solid #fde68a; color: #92400e; font-size: 9.5px; font-weight: 800;">
+                                            ⚡ ${p.promoText}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `</div>`;
+            return html;
+        }
+
         async function compartirListaPreciosDirecto() {
             const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
             if (prods.length === 0) {
@@ -2125,12 +2235,80 @@
 
                 const pdfBlob = await html2pdf().set(opciones).from(elemento).outputPdf('blob');
                 archivoPDFListoParaCompartir = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+                tituloShareActual = `Lista de Precios Oficial - ${(DB.bizConfig && DB.bizConfig.name) || ''}`;
+                textoShareActual = `Adjunto la Lista de Precios Oficial vigente al ${new Date().toLocaleDateString('es-AR')}.`;
+
+                const tModal = document.getElementById('tituloModalConfirmarPDF');
+                if (tModal) tModal.textContent = 'Lista de Precios Lista';
 
                 if (navigator.canShare && navigator.canShare({ files: [archivoPDFListoParaCompartir] })) {
                     await navigator.share({
                         files: [archivoPDFListoParaCompartir],
-                        title: `Lista de Precios Oficial - ${(DB.bizConfig && DB.bizConfig.name) || ''}`,
-                        text: `Adjunto la Lista de Precios Oficial vigente al ${new Date().toLocaleDateString('es-AR')}.`
+                        title: tituloShareActual,
+                        text: textoShareActual
+                    });
+                } else {
+                    alert('Tu navegador móvil no admite compartir archivos directos. Abrí este enlace desde Google Chrome o Safari en el celular.');
+                }
+            } catch (err) {
+                if (err.name === 'NotAllowedError') {
+                    document.getElementById('modalConfirmarCompartirPDF')?.classList.remove('hidden');
+                } else if (err.name !== 'AbortError') {
+                    alert('No se pudo abrir el menú de compartir: ' + (err.message || err));
+                }
+            } finally {
+                if (btn) {
+                    btn.innerHTML = htmlOriginalBtn;
+                    btn.disabled = false;
+                }
+            }
+        }
+
+        // --- COMPARTIR CATÁLOGO COMERCIAL (SIN PRECIOS) EN PDF POR WHATSAPP ---
+        async function compartirCatalogoSinPreciosDirecto() {
+            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+            if (prods.length === 0) {
+                alert('No hay productos activos cargados en el catálogo.');
+                return;
+            }
+
+            const btn = document.getElementById('btnHeaderCatalogoSinPrecios');
+            const htmlOriginalBtn = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-[10px]"></i> <span class="text-[10px] font-bold">Preparando...</span>';
+                btn.disabled = true;
+            }
+
+            try {
+                const contenedorOculto = document.getElementById('contenedorRenderPDFOculto');
+                contenedorOculto.innerHTML = construirHTMLCatalogoSinPreciosERP(prods);
+                const elemento = document.getElementById('hojaImprimiblePDF');
+
+                const hoy = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
+                const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Distribuidora';
+                const nombreArchivo = `Catalogo_Comercial_${bizName}_${hoy}.pdf`;
+
+                const opciones = {
+                    margin: [8, 8, 8, 8],
+                    filename: nombreArchivo,
+                    image: { type: 'jpeg', quality: 0.95 },
+                    html2canvas: { scale: 1.6, useCORS: true, logging: false },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                const pdfBlob = await html2pdf().set(opciones).from(elemento).outputPdf('blob');
+                archivoPDFListoParaCompartir = new File([pdfBlob], nombreArchivo, { type: 'application/pdf' });
+                tituloShareActual = `Catálogo de Productos - ${(DB.bizConfig && DB.bizConfig.name) || ''}`;
+                textoShareActual = `Adjunto nuestro Catálogo Comercial de Productos y Promociones vigente al ${new Date().toLocaleDateString('es-AR')}.`;
+
+                const tModal = document.getElementById('tituloModalConfirmarPDF');
+                if (tModal) tModal.textContent = 'Catálogo Comercial Listo';
+
+                if (navigator.canShare && navigator.canShare({ files: [archivoPDFListoParaCompartir] })) {
+                    await navigator.share({
+                        files: [archivoPDFListoParaCompartir],
+                        title: tituloShareActual,
+                        text: textoShareActual
                     });
                 } else {
                     alert('Tu navegador móvil no admite compartir archivos directos. Abrí este enlace desde Google Chrome o Safari en el celular.');
@@ -2155,8 +2333,8 @@
             try {
                 await navigator.share({
                     files: [archivoPDFListoParaCompartir],
-                    title: `Lista de Precios Oficial - ${(DB.bizConfig && DB.bizConfig.name) || ''}`,
-                    text: `Adjunto la Lista de Precios Oficial vigente al ${new Date().toLocaleDateString('es-AR')}.`
+                    title: tituloShareActual || `Documento PDF - ${(DB.bizConfig && DB.bizConfig.name) || ''}`,
+                    text: textoShareActual || `Adjunto documento comercial vigente al ${new Date().toLocaleDateString('es-AR')}.`
                 });
             } catch (e) {}
         }
