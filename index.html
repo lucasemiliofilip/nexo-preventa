@@ -680,13 +680,14 @@
             const isCustomerPromo = Boolean(p.isFeatured === true || volPromoActive || mixPromoActive || comboPromoActive || giftPromoActive);
             const isFeatured = Boolean(isCustomerPromo || incPromoActive);
 
+            // Respeta siempre el texto personalizado escrito por el usuario en el ERP
             let promoText = isCustomerPromo ? String(p.promoText || '').trim() : '';
             if (giftPromoActive && !promoText) {
                 promoText = `🎁 Llevando cada ${giftTriggerQty} u. ➔ +${giftRewardQty} de ${giftRewardName} SIN CARGO ($0)`;
             } else if (comboPromoActive && !promoText) {
                 promoText = `📦 ${comboName}: Pack ${comboMemberIds.length} art. ➔ -${comboDiscPct}% OFF`;
             } else if (volPromoActive && !promoText) {
-                promoText = `Llevando ${volMinQty}+ bultos: ${volDiscPct}% OFF automático`;
+                promoText = `Llevando ${volMinQty}+ u.: ${volDiscPct}% OFF automático`;
             } else if (mixPromoActive && !promoText) {
                 promoText = `Mix: Llevando ${mixTriggerQty}+ de ${mixTriggerName} ➔ ${mixDiscPct}% OFF`;
             }
@@ -897,7 +898,6 @@
             }
         }
 
-        // --- RENDERIZA ÚNICAMENTE LOS PEDIDOS PENDIENTES DE SALIR (OCULTA LOS QUE YA ESTÁN EN CARGA O REPARTO) ---
         function renderMisPedidosCargados() {
             const cont = document.getElementById('listaMisPedidosContenedor');
             const badge = document.getElementById('badgeCantMisPedidosList');
@@ -910,7 +910,6 @@
 
             const misPedidosPendientes = (DB.pedidosSemana || []).filter(p => {
                 if (eliminadosLocal.includes(String(p.id))) return false;
-                // Si el pedido ya entró en una Carga Armada o ya fue rendido, no mostrarlo acá
                 if (esPedidoYaDespachado(p)) return false;
 
                 const vendPed = (p.vendedor || p.seller || '').toLowerCase().trim();
@@ -953,7 +952,7 @@
                                 ${ped.editado_preventa ? `<span class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-bold">Editado</span>` : ''}
                             </div>
                             <span class="text-[10px] text-slate-400 block truncate">
-                                ${totalBultos} bultos ${dirCli ? `• ${dirCli}` : ''} ${fechaTxt ? `• ${fechaTxt}` : ''}
+                                ${totalBultos} u. ${dirCli ? `• ${dirCli}` : ''} ${fechaTxt ? `• ${fechaTxt}` : ''}
                             </span>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
@@ -1242,8 +1241,8 @@
 
             const totalRegalos = regalosList.reduce((acc, g) => acc + g.cantidad, 0);
             document.getElementById('editModalBultosCount').textContent = totalRegalos > 0
-                ? `${totalBultos} bultos (+${totalRegalos} de regalo 🎁)`
-                : `${totalBultos} bultos`;
+                ? `${totalBultos} u. (+${totalRegalos} de regalo 🎁)`
+                : `${totalBultos} u.`;
             document.getElementById('editModalTotalImporte').textContent = fmtMoneda(evalTicket.totalFinal);
             document.getElementById('editModalComisionImporte').textContent = `Mi comisión: ${fmtMoneda(evalTicket.comisionFinal)}`;
         }
@@ -1673,9 +1672,12 @@
             DB.clientesLocalesNuevos = localesPendientes;
             DB.clientes = [...clientesNube, ...localesPendientes];
 
-            // 1. Recolectar todos los IDs de pedidos que ya entraron en Cargas Armadas o fueron rendidos en Caja (sales)
             const setIdsDespachados = new Set();
             const mapaPedidosDespachadosExtra = {};
+
+            if (data.bizConfig && Array.isArray(data.bizConfig.dispatchedOrderIds)) {
+                data.bizConfig.dispatchedOrderIds.forEach(id => setIdsDespachados.add(String(id)));
+            }
 
             if (Array.isArray(data.cargas)) {
                 data.cargas.forEach(c => {
@@ -1722,7 +1724,6 @@
 
                 const mapaUnificadoSemana = {};
 
-                // A. Pedidos en data.orders
                 (data.orders || []).forEach(o => {
                     const idStr = String(o.id);
                     if (todosDescartados.has(idStr)) return;
@@ -1738,7 +1739,6 @@
                     }
                 });
 
-                // B. Pedidos que ya pasaron a Cargas Armadas o Cierre de Caja (suman al KPI semanal, pero quedan marcados como despachados)
                 Object.keys(mapaPedidosDespachadosExtra).forEach(idStr => {
                     if (todosDescartados.has(idStr)) return;
                     if (mapaUnificadoSemana[idStr]) {
@@ -1758,7 +1758,6 @@
                     }
                 });
 
-                // C. Pedidos recién creados en el celular en tránsito a Firebase
                 const ahoraMs = Date.now();
                 (DB.pedidosSemana || []).forEach(pLocal => {
                     const idStr = String(pLocal.id);
@@ -1777,7 +1776,6 @@
 
                 DB.pedidosSemana = Object.values(mapaUnificadoSemana);
 
-                // Si el vendedor tenía abierto el modal de un pedido que acaba de entrar en reparto, cerrarlo
                 if (pedidoEditandoModalId && setIdsDespachados.has(String(pedidoEditandoModalId))) {
                     cerrarModalEditarPedido();
                 }
@@ -2417,14 +2415,18 @@
                 }
             }
 
-            // 4. Banner de Escala / Volumen (Punto 1)
+            // 4. Banner de Escala / Volumen (Punto 1 - Respeta la descripción personalizada de Acciones Comerciales)
             if (p.volPromoActive) {
                 const precioConEscalaPreview = Math.round(p.pvp * (1 - (p.volDiscPct / 100)));
+                const leyendaVolumenMostrar = (p.promoText && p.promoText.trim().length > 0)
+                    ? p.promoText.trim()
+                    : `Llevando ${p.volMinQty}+ u.: -${p.volDiscPct}% OFF`;
+
                 if (calc.aplicaDescuentoVolumen) {
                     bannersHTML += `
                         <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/25 border border-emerald-400 text-emerald-200 text-[11px] font-extrabold flex items-center gap-1.5">
                             <i class="fa-solid fa-circle-check text-emerald-400"></i>
-                            <span>¡${p.volDiscPct}% OFF POR VOLUMEN APLICADO! (${fmtMoneda(calc.pvpUnitario)} c/u)</span>
+                            <span>¡-${p.volDiscPct}% OFF POR VOLUMEN APLICADO! (${fmtMoneda(calc.pvpUnitario)} c/u)</span>
                         </div>
                     `;
                 } else if (qty > 0 && qty < p.volMinQty) {
@@ -2432,14 +2434,14 @@
                     bannersHTML += `
                         <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-purple-500/20 border border-purple-400/50 text-purple-200 text-[11px] font-bold flex items-center gap-1.5">
                             <i class="fa-solid fa-layer-group text-purple-400"></i>
-                            <span>Sumá <strong>${faltan}</strong> más para activar <strong>-${p.volDiscPct}% OFF</strong> (${fmtMoneda(precioConEscalaPreview)} c/u)</span>
+                            <span>Sumá <strong>${faltan}</strong> más (llegar a ${p.volMinQty}) para activar <strong>-${p.volDiscPct}% OFF</strong> (${fmtMoneda(precioConEscalaPreview)} c/u)</span>
                         </div>
                     `;
                 } else {
                     bannersHTML += `
                         <div class="mt-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-200 text-[11px] font-bold flex items-center gap-1.5">
                             <i class="fa-solid fa-bolt text-amber-400"></i>
-                            <span>Llevando ${p.volMinQty}+ bultos: -${p.volDiscPct}% OFF (${fmtMoneda(precioConEscalaPreview)} c/u)</span>
+                            <span>${leyendaVolumenMostrar} (${fmtMoneda(precioConEscalaPreview)} c/u)</span>
                         </div>
                     `;
                 }
@@ -2797,8 +2799,8 @@
             }
 
             document.getElementById('txtItemsEnCarrito').textContent = totalRegalos > 0
-                ? `${totalUnidades} bultos (+${totalRegalos} de regalo 🎁)`
-                : `${totalUnidades} bultos`;
+                ? `${totalUnidades} u. (+${totalRegalos} de regalo 🎁)`
+                : `${totalUnidades} u.`;
 
             const lblSubTachado = document.getElementById('txtSubtotalTachadoCarrito');
             if (lblSubTachado) {
