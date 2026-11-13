@@ -474,12 +474,14 @@
         const STORAGE_KEY_PREVENTA = 'nexo_preventa_stock_v32';
         const STORAGE_KEY_VENDEDOR_FIJO = 'nexo_vendedor_fijo_celular_permanente';
         const STORAGE_KEY_PINS_FIJOS = 'nexo_vendedores_pins_permanente';
+        const STORAGE_KEY_IMAGENES_CAT = 'nexo_preventa_imagenes_v1';
 
         let DB = {
             bizConfig: { name: 'MI DISTRIBUIDORA / COMERCIO', contact: 'Presidencia Roque Sáenz Peña, Chaco', ticketPromoTiers: [] },
             vendedorActivo: '',
             vendedoresPins: {},
             catalogo: [],
+            catalogoImagenes: {},
             clientes: [],
             clientesLocalesNuevos: [],
             vendedores: ['Walter Coronel', 'Oscar Cisnero', 'Lucas Filip'],
@@ -502,6 +504,21 @@
         let pedidoEditandoCatalogoId = null;
         let cantOriginalEdicionCatalogo = {};
         let acordeonMisPedidosAbierto = true;
+
+        function cargarImagenesCacheLocal() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_IMAGENES_CAT);
+                if (raw) {
+                    DB.catalogoImagenes = Object.assign({}, JSON.parse(raw), DB.catalogoImagenes || {});
+                }
+            } catch (e) {}
+        }
+
+        function guardarImagenesCacheLocal(mapa) {
+            try {
+                localStorage.setItem(STORAGE_KEY_IMAGENES_CAT, JSON.stringify(mapa || {}));
+            } catch (e) {}
+        }
 
         function esVendedorValidoPreventa(nombre) {
             if (!nombre) return false;
@@ -774,13 +791,17 @@
             };
         }
 
-        // --- LECTOR DE PRODUCTO Y REGLAS (PUNTOS 1 AL 6) ---
+        // --- LECTOR DE PRODUCTO Y REGLAS (PUNTOS 1 AL 6 + FOTO SINCRONIZADA) ---
         function obtenerDatosProducto(p) {
             const id = String(p.id || p.codigo || p.sku || Math.random());
             const nombre = p.nombre || p.name || p.descripcion || p.description || 'Producto';
             const presentacion = p.grams || p.presentacion || p.unit || 'Unidad';
             const stock = !isNaN(Number(p.stock)) ? Number(p.stock) : 0;
-            const img = (p.img && String(p.img).length > 20 && !String(p.img).includes('indexeddb_saved')) ? String(p.img) : '';
+
+            let img = (p.img && String(p.img).length > 30 && !String(p.img).includes('indexeddb_saved')) ? String(p.img) : '';
+            if (!img && DB.catalogoImagenes && DB.catalogoImagenes[id]) {
+                img = DB.catalogoImagenes[id];
+            }
             
             const volPromoActive = Boolean(p.volPromoActive && Number(p.volMinQty) > 0 && Number(p.volDiscPct) > 0);
             const volMinQty = Number(p.volMinQty) || 0;
@@ -1731,6 +1752,8 @@
                 }
             } catch (e) {}
 
+            cargarImagenesCacheLocal();
+
             const pinsGuardados = obtenerPinsGuardadosLocalmente();
             DB.vendedoresPins = Object.assign({}, DB.vendedoresPins || {}, pinsGuardados);
             guardarPinsLocalmente(DB.vendedoresPins);
@@ -1946,6 +1969,17 @@
                 }
             });
 
+            // Escucha en vivo de las fotos del catálogo sincronizadas desde el ERP
+            db.collection('nexo_erp').doc('catalogo_imagenes').onSnapshot((doc) => {
+                if (doc.exists) {
+                    const d = doc.data() || {};
+                    if (d.imagenes && typeof d.imagenes === 'object') {
+                        DB.catalogoImagenes = Object.assign({}, DB.catalogoImagenes || {}, d.imagenes);
+                        guardarImagenesCacheLocal(DB.catalogoImagenes);
+                    }
+                }
+            });
+
             db.collection('nexo_erp').doc('pines_vendedores').onSnapshot((doc) => {
                 if (doc.exists) {
                     const pinsNube = doc.data() || {};
@@ -1979,9 +2013,19 @@
         function recargarDesdeFirebaseManual() {
             const btnSync = document.getElementById('btnSync');
             if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-xs"></i>...';
-            db.collection('nexo_erp').doc('datos_globales').get({ source: 'server' })
-                .then(doc => {
-                    if (doc.exists) aplicarDatosDesdeFirebase(doc.data());
+            Promise.all([
+                db.collection('nexo_erp').doc('datos_globales').get({ source: 'server' }),
+                db.collection('nexo_erp').doc('catalogo_imagenes').get({ source: 'server' }).catch(() => null)
+            ])
+                .then(([docGlobal, docImgs]) => {
+                    if (docImgs && docImgs.exists) {
+                        const dImg = docImgs.data() || {};
+                        if (dImg.imagenes) {
+                            DB.catalogoImagenes = Object.assign({}, DB.catalogoImagenes || {}, dImg.imagenes);
+                            guardarImagenesCacheLocal(DB.catalogoImagenes);
+                        }
+                    }
+                    if (docGlobal && docGlobal.exists) aplicarDatosDesdeFirebase(docGlobal.data());
                     if (btnSync) btnSync.innerHTML = '<i class="fa-solid fa-cloud-check text-xs"></i> Online';
                 })
                 .catch(() => {
@@ -1990,7 +2034,11 @@
         }
 
         function saveDB() {
-            try { localStorage.setItem(STORAGE_KEY_PREVENTA, JSON.stringify(DB)); } catch (e) {}
+            try {
+                const copiaSinFotosPesadas = Object.assign({}, DB);
+                delete copiaSinFotosPesadas.catalogoImagenes;
+                localStorage.setItem(STORAGE_KEY_PREVENTA, JSON.stringify(copiaSinFotosPesadas));
+            } catch (e) {}
         }
 
         function setFiltroPromos(activarSoloPromos) {
@@ -2005,6 +2053,21 @@
                 btnPromos.className = 'flex-1 py-2 px-3 rounded-xl text-xs font-extrabold uppercase transition cursor-pointer bg-slate-900 text-amber-400 border border-amber-500/40 flex items-center justify-center gap-1.5';
             }
             renderCatalogo(document.getElementById('inputBuscarProd').value);
+        }
+
+        // --- ESPERA A QUE TODAS LAS ETIQUETAS <img> DEL CONTENEDOR OCULTO CARGUEN ANTES DE CREAR EL PDF ---
+        function esperarCargaImagenesEnElemento(contenedor) {
+            if (!contenedor) return Promise.resolve();
+            const imgs = Array.from(contenedor.querySelectorAll('img'));
+            if (imgs.length === 0) return Promise.resolve();
+            return Promise.all(imgs.map(img => {
+                if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+                return new Promise(res => {
+                    img.onload = () => res();
+                    img.onerror = () => res();
+                    setTimeout(res, 1800);
+                });
+            }));
         }
 
         // --- GENERADOR HTML DE LISTA DE PRECIOS CON IMPORTES ---
@@ -2100,7 +2163,7 @@
             return html;
         }
 
-        // --- GENERADOR HTML DE CATÁLOGO COMERCIAL DEL ERP (SIN PRECIOS) ---
+        // --- GENERADOR HTML DE CATÁLOGO COMERCIAL DEL ERP (CON FOTOS Y SIN PRECIOS) ---
         function construirHTMLCatalogoSinPreciosERP(prods) {
             const hoy = new Date().toLocaleDateString('es-AR');
             const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA / COMERCIO';
@@ -2141,11 +2204,12 @@
                             ${destacados.map(p => `
                                 <div style="background: #ffffff; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; page-break-inside: avoid;">
                                     <div>
-                                        ${p.img ? `
-                                            <div style="height: 85px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 6px; overflow: hidden; padding: 4px;">
-                                                <img src="${p.img}" style="max-height: 100%; max-width: 100%; object-fit: contain;">
-                                            </div>
-                                        ` : ''}
+                                        <div style="height: 115px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 6px; overflow: hidden; padding: 4px;">
+                                            ${p.img
+                                                ? `<img src="${p.img}" style="max-height: 100%; max-width: 100%; object-fit: contain;">`
+                                                : `<span style="font-size: 9px; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Sin Foto</span>`
+                                            }
+                                        </div>
                                         <div style="font-size: 11px; font-weight: 800; color: #0f172a; line-height: 1.25;">${p.nombre}</div>
                                         <div style="font-size: 10px; font-weight: 700; color: #475569; margin-top: 3px;">📦 ${p.presentacion}</div>
                                     </div>
@@ -2178,11 +2242,12 @@
                             ${agrupados[cat].map(p => `
                                 <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; justify-content: space-between; page-break-inside: avoid;">
                                     <div>
-                                        ${p.img ? `
-                                            <div style="height: 85px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border-radius: 6px; overflow: hidden; padding: 4px;">
-                                                <img src="${p.img}" style="max-height: 100%; max-width: 100%; object-fit: contain;">
-                                            </div>
-                                        ` : ''}
+                                        <div style="height: 115px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 6px; overflow: hidden; padding: 4px;">
+                                            ${p.img
+                                                ? `<img src="${p.img}" style="max-height: 100%; max-width: 100%; object-fit: contain;">`
+                                                : `<span style="font-size: 9px; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Sin Foto</span>`
+                                            }
+                                        </div>
                                         <div style="font-size: 11px; font-weight: 800; color: #0f172a; line-height: 1.25;">${p.nombre}</div>
                                         <div style="font-size: 10px; font-weight: 700; color: #64748b; margin-top: 3px;">📦 ${p.presentacion || 'Unidad'}</div>
                                     </div>
@@ -2264,14 +2329,8 @@
             }
         }
 
-        // --- COMPARTIR CATÁLOGO COMERCIAL (SIN PRECIOS) EN PDF POR WHATSAPP ---
+        // --- COMPARTIR CATÁLOGO COMERCIAL (CON FOTOS Y SIN PRECIOS) EN PDF POR WHATSAPP ---
         async function compartirCatalogoSinPreciosDirecto() {
-            const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
-            if (prods.length === 0) {
-                alert('No hay productos activos cargados en el catálogo.');
-                return;
-            }
-
             const btn = document.getElementById('btnHeaderCatalogoSinPrecios');
             const htmlOriginalBtn = btn ? btn.innerHTML : '';
             if (btn) {
@@ -2280,9 +2339,32 @@
             }
 
             try {
+                // Si el celular aún no descargó el diccionario de fotos de Firebase, lo busca antes de armar el PDF
+                if (!DB.catalogoImagenes || Object.keys(DB.catalogoImagenes).length === 0) {
+                    try {
+                        const docImgs = await db.collection('nexo_erp').doc('catalogo_imagenes').get();
+                        if (docImgs.exists) {
+                            const d = docImgs.data() || {};
+                            if (d.imagenes) {
+                                DB.catalogoImagenes = Object.assign({}, DB.catalogoImagenes || {}, d.imagenes);
+                                guardarImagenesCacheLocal(DB.catalogoImagenes);
+                            }
+                        }
+                    } catch (e) {}
+                }
+
+                const prods = (DB.catalogo || []).map(obtenerDatosProducto).filter(p => p.activo);
+                if (prods.length === 0) {
+                    alert('No hay productos activos cargados en el catálogo.');
+                    return;
+                }
+
                 const contenedorOculto = document.getElementById('contenedorRenderPDFOculto');
                 contenedorOculto.innerHTML = construirHTMLCatalogoSinPreciosERP(prods);
                 const elemento = document.getElementById('hojaImprimiblePDF');
+
+                // Esperar a que todas las fotos base64 terminen de decodificarse en el DOM
+                await esperarCargaImagenesEnElemento(elemento);
 
                 const hoy = new Date().toLocaleDateString('es-AR').replace(/\//g, '-');
                 const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Distribuidora';
@@ -2302,7 +2384,7 @@
                 textoShareActual = `Adjunto nuestro Catálogo Comercial de Productos y Promociones vigente al ${new Date().toLocaleDateString('es-AR')}.`;
 
                 const tModal = document.getElementById('tituloModalConfirmarPDF');
-                if (tModal) tModal.textContent = 'Catálogo Comercial Listo';
+                if (tModal) tModal.textContent = 'Catálogo con Fotos Listo';
 
                 if (navigator.canShare && navigator.canShare({ files: [archivoPDFListoParaCompartir] })) {
                     await navigator.share({
