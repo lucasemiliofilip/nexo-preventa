@@ -327,8 +327,18 @@
                 </div>
             </div>
 
+            <!-- Botón de WhatsApp para enviar el resumen actualizado del pedido editado -->
+            <div class="flex items-center gap-1.5 pt-1">
+                <button type="button" onclick="enviarResumenPedidoWhatsApp('edicion', false)" class="flex-1 bg-emerald-600/25 hover:bg-emerald-600/35 active:scale-98 border border-emerald-500/50 text-emerald-300 font-black text-[11px] uppercase py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2">
+                    <i class="fa-brands fa-whatsapp text-sm text-emerald-400"></i> Enviar Resumen por WhatsApp
+                </button>
+                <button type="button" onclick="enviarResumenPedidoWhatsApp('edicion', true)" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold text-[10px] py-2.5 px-2.5 rounded-xl transition cursor-pointer" title="Elegir otro contacto de WhatsApp">
+                    <i class="fa-solid fa-address-book"></i>
+                </button>
+            </div>
+
             <!-- Botones de Acción (Guardar / Cerrar / Eliminar Pedido) -->
-            <div class="space-y-2 pt-1">
+            <div class="space-y-2 pt-0.5">
                 <div class="grid grid-cols-2 gap-2">
                     <button onclick="cerrarModalEditarPedido()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2.5 rounded-xl transition cursor-pointer">
                         Cerrar
@@ -365,9 +375,9 @@
         </div>
     </div>
 
-    <!-- MODAL RESUMEN -->
+    <!-- MODAL RESUMEN ANTES DE CONFIRMAR PEDIDO -->
     <div id="modalResumenPedido" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-end sm:items-center justify-center p-3">
-        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-5 space-y-4 shadow-2xl max-h-[92vh] overflow-y-auto">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
                 <h3 id="tituloModalResumenPedido" class="text-sm font-black uppercase text-white flex items-center gap-2">
                     <i class="fa-solid fa-receipt text-emerald-400"></i> Resumen del Pedido
@@ -401,7 +411,21 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 pt-2">
+            <!-- BOTÓN PARA ENVIAR RESUMEN DE LA VENTA POR WHATSAPP AL CLIENTE ANTES DE CERRAR -->
+            <div class="pt-1">
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="enviarResumenPedidoWhatsApp('carrito', false)" class="flex-1 bg-emerald-600/20 hover:bg-emerald-600/30 active:scale-98 border border-emerald-500/50 text-emerald-300 font-black text-xs uppercase py-3 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 shadow-md">
+                        <i class="fa-brands fa-whatsapp text-base text-emerald-400"></i>
+                        <span id="lblBtnWhatsAppResumen">Enviar Resumen por WhatsApp</span>
+                    </button>
+                    <button type="button" onclick="enviarResumenPedidoWhatsApp('carrito', true)" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-bold text-[11px] py-3 px-3 rounded-xl transition cursor-pointer flex items-center justify-center" title="Elegir contacto manualmente en WhatsApp">
+                        <i class="fa-solid fa-user-plus text-xs"></i>
+                    </button>
+                </div>
+                <span id="lblHintWhatsAppTelefono" class="text-[10px] text-slate-500 block text-center mt-1">El cliente recibirá el detalle de productos y el total a pagar</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 pt-1">
                 <button onclick="cerrarResumenPedidoModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-3 rounded-xl transition cursor-pointer">Seguir Cargando</button>
                 <button id="btnConfirmarResumenModal" onclick="confirmarYGuardarPedido()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black uppercase py-3 rounded-xl transition shadow-lg shadow-emerald-500/20 active:scale-95 cursor-pointer">Confirmar Pedido</button>
             </div>
@@ -561,6 +585,157 @@
             }
             const d = parseFechaPedido(fechaStr);
             return d.toLocaleDateString('es-AR');
+        }
+
+        function formatearFechaISOaDMY(isoStr) {
+            if (!isoStr) return new Date().toLocaleDateString('es-AR');
+            const p = String(isoStr).trim().split('-');
+            if (p.length === 3 && p[0].length === 4) {
+                return `${p[2]}/${p[1]}/${p[0]}`;
+            }
+            return isoStr;
+        }
+
+        // --- NORMALIZA EL TELÉFONO DEL CLIENTE PARA ABRIR WHATSAPP DIRECTO ---
+        function normalizarTelefonoArgentinaWhatsApp(rawTel) {
+            if (!rawTel) return '';
+            let dig = String(rawTel).replace(/\D/g, '');
+            if (!dig) return '';
+            if (dig.startsWith('00')) dig = dig.slice(2);
+            if (dig.startsWith('0')) dig = dig.slice(1);
+            if (dig.length === 10) {
+                return '549' + dig;
+            }
+            if (dig.length === 11 && dig.startsWith('54') && !dig.startsWith('549')) {
+                return '549' + dig.slice(2);
+            }
+            if (dig.length >= 10) {
+                return dig;
+            }
+            return '';
+        }
+
+        // --- ARMA Y ENVÍA EL RESUMEN DEL PEDIDO POR WHATSAPP AL CLIENTE ---
+        function enviarResumenPedidoWhatsApp(modo = 'carrito', forzarElegirContacto = false) {
+            const esModalEdicion = (modo === 'edicion');
+            const mapaCantidades = esModalEdicion ? carritoEdicionModal : carrito;
+            const catalogMap = (DB.catalogo || []).map(obtenerDatosProducto);
+
+            const idsActivos = Object.keys(mapaCantidades).filter(id => (Number(mapaCantidades[id]) || 0) > 0);
+            if (idsActivos.length === 0) {
+                alert('No hay productos cargados en el pedido para enviar.');
+                return;
+            }
+
+            let nombreCliente = 'Cliente';
+            let dirCliente = '';
+            let telCliente = '';
+            let fechaEntregaRaw = '';
+            let obsTexto = '';
+
+            if (esModalEdicion && pedidoEditandoModalId) {
+                const ped = (DB.pedidosSemana || []).find(p => String(p.id) === String(pedidoEditandoModalId));
+                if (ped) {
+                    nombreCliente = obtenerNombreClienteDePedido(ped);
+                    dirCliente = obtenerDireccionClienteDePedido(ped);
+                    telCliente = (ped.cliente && (ped.cliente.telefono || ped.cliente.phone)) || ped.clientPhone || '';
+                    if (!telCliente) {
+                        const cMatch = (DB.clientes || []).find(c =>
+                            (ped.cliente && String(c.id) === String(ped.cliente.id)) ||
+                            String(c.name || c.nombre || '').toLowerCase().trim() === nombreCliente.toLowerCase().trim()
+                        );
+                        if (cMatch) telCliente = cMatch.phone || cMatch.telefono || '';
+                    }
+                }
+                fechaEntregaRaw = document.getElementById('editModalFechaEntrega')?.value || '';
+                obsTexto = (document.getElementById('editModalObservacion')?.value || '').trim();
+            } else {
+                const clienteId = document.getElementById('selCliente')?.value || '';
+                const pedEditCat = pedidoEditandoCatalogoId ? (DB.pedidosSemana || []).find(p => String(p.id) === String(pedidoEditandoCatalogoId)) : null;
+                const clienteObj = (DB.clientes || []).find(c => String(c.id) === String(clienteId));
+
+                if (clienteObj) {
+                    nombreCliente = clienteObj.name || clienteObj.nombre || 'Cliente';
+                    const rawAddr = clienteObj.addr || clienteObj.direccion || '';
+                    dirCliente = rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr.trim();
+                    telCliente = clienteObj.phone || clienteObj.telefono || '';
+                } else if (pedEditCat) {
+                    nombreCliente = obtenerNombreClienteDePedido(pedEditCat);
+                    dirCliente = obtenerDireccionClienteDePedido(pedEditCat);
+                    telCliente = (pedEditCat.cliente && (pedEditCat.cliente.telefono || pedEditCat.cliente.phone)) || pedEditCat.clientPhone || '';
+                } else {
+                    nombreCliente = document.getElementById('resumenModalClienteNombre')?.textContent || 'Cliente';
+                    dirCliente = document.getElementById('resumenModalClienteDir')?.textContent || '';
+                }
+                fechaEntregaRaw = document.getElementById('txtPedidoFechaEntrega')?.value || '';
+                obsTexto = (document.getElementById('txtPedidoObservacion')?.value || '').trim();
+            }
+
+            const bizName = (DB.bizConfig && DB.bizConfig.name) ? DB.bizConfig.name : 'MI DISTRIBUIDORA';
+            const fechaEntregaFmt = formatearFechaISOaDMY(fechaEntregaRaw);
+            const vendedorNombre = obtenerVendedorFijoDispositivo() || DB.vendedorActivo || 'Preventa';
+
+            let subtotalBruto = 0;
+            let comisionBruta = 0;
+            let totalUnidades = 0;
+            let lineasProductos = [];
+
+            idsActivos.forEach(id => {
+                const cant = Number(mapaCantidades[id]) || 0;
+                if (cant > 0) {
+                    const p = catalogMap.find(x => String(x.id) === String(id));
+                    const calc = p ? calcularPrecioSegunCantidad(p, cant, mapaCantidades) : { pvpUnitario: 0, subtotal: 0, comisionTotal: 0, aplicaDescuento: false, discPct: 0 };
+                    subtotalBruto += calc.subtotal;
+                    comisionBruta += calc.comisionTotal;
+                    totalUnidades += cant;
+
+                    const nombreArt = p ? p.nombre : 'Artículo';
+                    const tagDesc = calc.aplicaDescuento ? ` _(-${calc.discPct}% OFF)_` : '';
+                    lineasProductos.push(`▪ *${cant}x* ${nombreArt}${tagDesc}\n   ${fmtMoneda(calc.pvpUnitario)} c/u ➔ *${fmtMoneda(calc.subtotal)}*`);
+                }
+            });
+
+            const regalosList = obtenerRegalosActivosDelCarrito(catalogMap, mapaCantidades);
+            const totalRegalos = regalosList.reduce((acc, g) => acc + (Number(g.cantidad) || 0), 0);
+            regalosList.forEach(reg => {
+                lineasProductos.push(`🎁 *${reg.cantidad}x* ${reg.rewardName}\n   _SIN CARGO / DE REGALO_ ➔ *$ 0*`);
+            });
+
+            const evalTicket = evaluarEscaleraFacturacion(subtotalBruto, comisionBruta);
+
+            let msg = `📦 *${bizName.toUpperCase()}*\n`;
+            msg += `🧾 *RESUMEN DE TU PEDIDO*\n`;
+            msg += `──────────────────\n`;
+            msg += `👤 *Cliente:* ${nombreCliente}\n`;
+            if (dirCliente && dirCliente !== 'Sin dirección') {
+                msg += `📍 *Dirección:* ${dirCliente}\n`;
+            }
+            msg += `📅 *Fecha de Entrega:* ${fechaEntregaFmt}\n`;
+            msg += `🧑‍💼 *Preventista:* ${vendedorNombre}\n`;
+            if (obsTexto) {
+                msg += `📝 *Nota:* ${obsTexto}\n`;
+            }
+            msg += `──────────────────\n`;
+            msg += `📋 *DETALLE DE ARTÍCULOS:*\n\n`;
+            msg += lineasProductos.join('\n\n') + '\n';
+            msg += `──────────────────\n`;
+            msg += `📦 *Cantidad Total:* ${totalUnidades} u.${totalRegalos > 0 ? ` (+${totalRegalos} sin cargo 🎁)` : ''}\n`;
+
+            if (evalTicket.descuentoMonto > 0 && evalTicket.tierAlcanzado) {
+                msg += `💵 *Subtotal:* ${fmtMoneda(evalTicket.subtotalBruto)}\n`;
+                msg += `🏆 *Descuento General (-${evalTicket.discPct}%):* -${fmtMoneda(evalTicket.descuentoMonto)}\n`;
+            }
+
+            msg += `💰 *TOTAL A PAGAR: ${fmtMoneda(evalTicket.totalFinal)}*\n`;
+            msg += `──────────────────\n`;
+            msg += `_¡Muchas gracias por tu compra!_`;
+
+            const telNormalizado = normalizarTelefonoArgentinaWhatsApp(telCliente);
+            const url = (!forzarElegirContacto && telNormalizado)
+                ? `https://wa.me/${telNormalizado}?text=${encodeURIComponent(msg)}`
+                : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+            window.open(url, '_blank');
         }
 
         // --- DETECTA SI UN PEDIDO YA FUE ARMADO EN UNA CARGA O SALIÓ A REPARTO ---
@@ -2829,9 +3004,18 @@
                 const rawAddr = cliente ? (cliente.addr || cliente.direccion || '') : '';
                 return rawAddr.includes('|||') ? rawAddr.split('|||')[0].trim() : rawAddr;
             })();
+            const telRaw = cliente ? (cliente.phone || cliente.telefono || '') : ((pedEdit && pedEdit.cliente && (pedEdit.cliente.telefono || pedEdit.cliente.phone)) || '');
+            const telNorm = normalizarTelefonoArgentinaWhatsApp(telRaw);
 
             document.getElementById('resumenModalClienteNombre').textContent = nomMostrar;
             document.getElementById('resumenModalClienteDir').textContent = dirMostrar || 'Sin dirección';
+
+            const hintWa = document.getElementById('lblHintWhatsAppTelefono');
+            if (hintWa) {
+                hintWa.textContent = telNorm
+                    ? `Se enviará directo al WhatsApp del cliente (${telRaw})`
+                    : 'Se abrirá WhatsApp para que elijas el contacto del cliente';
+            }
 
             const btnConf = document.getElementById('btnConfirmarResumenModal');
             if (btnConf) {
